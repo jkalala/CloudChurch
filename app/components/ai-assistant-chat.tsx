@@ -48,30 +48,24 @@ export default function AIAssistantChat() {
   const recognition = useRef<any>(null)
   const [showHelpBanner, setShowHelpBanner] = useState(true)
   const quickSuggestions = [
-    "How many members do we have?",
-    "What's our attendance rate?",
-    "Show upcoming events",
-    "Which members need attention?",
-    "Financial summary for this month",
-    "Suggest a sermon topic",
-    "Who has a birthday this week?",
-    "Show recent donations",
-  ]
+    t("aiAssistant.suggestions.memberStats"),
+    t("aiAssistant.suggestions.attendanceRate"),
+    t("aiAssistant.suggestions.upcomingEvents"),
+    t("aiAssistant.suggestions.memberCare"),
+    t("aiAssistant.suggestions.financialSummary"),
+    t("aiAssistant.suggestions.sermonTopic"),
+    t("aiAssistant.suggestions.birthdays"),
+    t("aiAssistant.suggestions.recentDonations"),
+  ];
 
   // Initialize with welcome message
   useEffect(() => {
     const welcomeMessage: ChatMessage = {
       id: "welcome",
       type: "assistant",
-      content: `Hello! I'm your AI Church Assistant. I can help you with member management, attendance insights, event planning, financial analysis, and much more. What would you like to know about your church today?`,
+      content: t("aiAssistant.chat.welcome"),
       timestamp: new Date().toISOString(),
-      suggestions: [
-        "How many members do we have?",
-        "What's our attendance rate?",
-        "Show upcoming events",
-        "Which members need attention?",
-        "Financial summary for this month",
-      ],
+      suggestions: quickSuggestions.slice(0, 5),
     }
     setMessages([welcomeMessage])
   }, [])
@@ -200,13 +194,13 @@ export default function AIAssistantChat() {
           <CardContent className="flex items-center gap-4 py-3">
             <Info className="h-6 w-6 text-blue-500" />
             <div className="flex-1">
-              <div className="font-semibold text-blue-700">Welcome to your AI Church Assistant!</div>
+              <div className="font-semibold text-blue-700">{t("aiAssistant.chat.bannerTitle")}</div>
               <div className="text-sm text-blue-700">
-                Ask anything about your church: members, attendance, events, finances, and more. Try voice input or click a suggestion below. Hover over icons for tips.
+                {t("aiAssistant.chat.bannerDesc")}
               </div>
             </div>
             <Button size="sm" variant="ghost" onClick={() => setShowHelpBanner(false)}>
-              Dismiss
+              {t("common.cancel")}
             </Button>
           </CardContent>
         </Card>
@@ -216,10 +210,10 @@ export default function AIAssistantChat() {
           <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600">
             <Bot className="h-5 w-5 text-white" />
           </div>
-          AI Church Assistant
+          {t("aiAssistant.title")}
           <Badge variant="secondary" className="ml-auto">
             <Sparkles className="h-3 w-3 mr-1" />
-            Smart
+            {t("aiAssistant.chat.smart")}
           </Badge>
         </CardTitle>
       </CardHeader>

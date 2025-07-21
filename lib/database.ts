@@ -25,6 +25,7 @@ export interface Member {
   notes?: string
   created_at: string
   updated_at: string
+  tags?: string[]
 }
 
 export interface Event {
@@ -153,13 +154,29 @@ class DatabaseService {
   // Singleton Supabase client (component-safe)
   private static supabase = createClientComponentClient<Database>()
 
+  static async logMemberAudit(memberId: string, action: string, details: any, userId: string = 'system', userEmail: string = 'system') {
+    await this.supabase.from('member_audit_log').insert({
+      member_id: memberId,
+      action,
+      user_id: userId,
+      user_email: userEmail,
+      details,
+    })
+  }
+
   /* ---------- MEMBERS ---------- */
   static async getMembers(): Promise<Member[]> {
     try {
-      const { data, error } = await this.supabase.from("members").select("*").order("created_at", { ascending: false })
-
+      const { data, error } = await this.supabase
+        .from("members")
+        .select("*, member_tags:member_tags(tag)")
+        .order("created_at", { ascending: false })
       if (error) throw error
-      return data || []
+      // Map tags into tags: string[]
+      return (data || []).map((m: any) => ({
+        ...m,
+        tags: m.member_tags ? m.member_tags.map((t: any) => t.tag) : [],
+      }))
     } catch (error) {
       console.error("Error fetching members:", error)
       return []
@@ -186,6 +203,7 @@ class DatabaseService {
       .select()
       .single()
     if (error) throw error
+    await this.logMemberAudit(data.id, 'add', data)
     // Update IndexedDB
     const localMembers = await offlineStorage.getMembers()
     await offlineStorage.saveMembers([data, ...localMembers])
@@ -212,6 +230,7 @@ class DatabaseService {
       .select()
       .single()
     if (error) throw error
+    await this.logMemberAudit(id, 'edit', memberData)
     // Update IndexedDB
     const localMembers = await offlineStorage.getMembers()
     const updatedMembers = localMembers.map(m => m.id === id ? data : m)
@@ -231,6 +250,7 @@ class DatabaseService {
     }
     const { error } = await this.supabase.from("members").delete().eq("id", id)
     if (error) throw error
+    await this.logMemberAudit(id, 'delete', { id })
     // Update IndexedDB
     const localMembers = await offlineStorage.getMembers()
     const updatedMembers = localMembers.filter(m => m.id !== id)
@@ -240,6 +260,12 @@ class DatabaseService {
   static async bulkUpdateMembers(memberIds: string[], updates: Record<string, any>): Promise<void> {
     const { error } = await this.supabase.from("members").update(updates).in("id", memberIds)
     if (error) throw error
+  }
+
+  static async getMemberById(id: string): Promise<Member | null> {
+    const { data, error } = await this.supabase.from("members").select("*").eq("id", id).single();
+    if (error) return null;
+    return data;
   }
 
   /* ---------- EVENTS ---------- */

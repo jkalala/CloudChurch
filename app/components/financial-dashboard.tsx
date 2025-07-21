@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { DatabaseService } from "@/lib/database"
 import { useTranslation } from "@/lib/i18n"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useAuth } from "@/components/auth-provider";
 
 interface FinancialSummary {
   totalTithes: number
@@ -68,7 +69,8 @@ interface BudgetCategory {
 }
 
 export default function FinancialDashboard() {
-  const { t } = useTranslation()
+  const { language } = useAuth();
+  const { t } = useTranslation(language);
   const [summary, setSummary] = useState<FinancialSummary>({
     totalTithes: 0,
     totalOfferings: 0,
@@ -105,6 +107,8 @@ export default function FinancialDashboard() {
     period: "monthly",
     categories: [] as { name: string; allocated_amount: string; color: string; icon: string }[],
   })
+
+  const isIncome = (type: string) => ["tithe", "offering", "donation"].includes(type);
 
   useEffect(() => {
     loadFinancialData()
@@ -164,8 +168,8 @@ export default function FinancialDashboard() {
         description: newTransaction.description,
         payment_method: newTransaction.payment_method,
         transaction_date: new Date().toISOString(),
-        member_id: newTransaction.member_id || null,
-        category: newTransaction.category || null,
+        member_id: newTransaction.member_id || undefined,
+        category: newTransaction.category || undefined,
       }
 
       await DatabaseService.createFinancialTransaction(transactionData)
@@ -294,20 +298,20 @@ export default function FinancialDashboard() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">{t("finance")}</h2>
-          <p className="text-gray-600">Controle financeiro da igreja</p>
+          <p className="text-gray-600">{t("financial.description")}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm">
             <Download className="h-4 w-4 mr-2" />
-            Relatório
+            {t("financial.report")}
           </Button>
           <Button variant="outline" size="sm">
             <Filter className="h-4 w-4 mr-2" />
-            Filtros
+            {t("financial.filters")}
           </Button>
           <Button size="sm" onClick={() => setShowAddTransaction(true)}>
             <Plus className="h-4 w-4 mr-2" />
-            Nova Transação
+            {t("financial.addTransaction")}
           </Button>
         </div>
       </div>
@@ -337,17 +341,17 @@ export default function FinancialDashboard() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5" />
-            Gestão Financeira
+            {t("financial.management")}
           </CardTitle>
-          <CardDescription>Visualize e gerencie todas as transações financeiras</CardDescription>
+          <CardDescription>{t("financial.managementDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
-              <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-              <TabsTrigger value="income">Receitas</TabsTrigger>
-              <TabsTrigger value="expenses">Despesas</TabsTrigger>
-              <TabsTrigger value="reports">Relatórios</TabsTrigger>
+              <TabsTrigger value="overview">{t("financial.tabs.overview")}</TabsTrigger>
+              <TabsTrigger value="income">{t("financial.tabs.income")}</TabsTrigger>
+              <TabsTrigger value="expenses">{t("financial.tabs.expenses")}</TabsTrigger>
+              <TabsTrigger value="reports">{t("financial.tabs.reports")}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="mt-4">
@@ -367,14 +371,14 @@ export default function FinancialDashboard() {
                     {transactions.slice(0, 5).map((transaction) => (
                       <TableRow key={transaction.id}>
                         <TableCell>
-                          <Badge variant={transaction.type === "income" ? "default" : "secondary"}>
-                            {transaction.type === "income" ? "Receita" : "Despesa"}
+                          <Badge variant={isIncome(transaction.type) ? "default" : "secondary"}>
+                            {isIncome(transaction.type) ? "Receita" : "Despesa"}
                           </Badge>
                         </TableCell>
                         <TableCell>{transaction.category}</TableCell>
                         <TableCell>{transaction.description}</TableCell>
-                        <TableCell className={transaction.type === "income" ? "text-green-600" : "text-red-600"}>
-                          {transaction.type === "income" ? "+" : "-"}
+                        <TableCell className={isIncome(transaction.type) ? "text-green-600" : "text-red-600"}>
+                          {isIncome(transaction.type) ? "+" : "-"}
                           {formatCurrency(transaction.amount)}
                         </TableCell>
                         <TableCell>{new Date(transaction.date).toLocaleDateString("pt-BR")}</TableCell>
@@ -399,7 +403,7 @@ export default function FinancialDashboard() {
                   </TableHeader>
                   <TableBody>
                     {transactions
-                      .filter((t) => t.type === "income")
+                      .filter((t) => isIncome(t.type))
                       .map((transaction) => (
                         <TableRow key={transaction.id}>
                           <TableCell>{transaction.category}</TableCell>

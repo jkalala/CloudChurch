@@ -1,10 +1,60 @@
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { Sparkles, Search, BookOpen, Sun } from "lucide-react"
+
+// Custom hook for devotional and study generation logic
+interface UseBibleToolsGenerationParams {
+  setDevotional: React.Dispatch<React.SetStateAction<any | null>>;
+  setDevotionalLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  setDevotionalError: React.Dispatch<React.SetStateAction<string>>;
+  setStudyResult: React.Dispatch<React.SetStateAction<any | null>>;
+  setStudyLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  setStudyError: React.Dispatch<React.SetStateAction<string>>;
+}
+export function useBibleToolsGeneration({ setDevotional, setDevotionalLoading, setDevotionalError, setStudyResult, setStudyLoading, setStudyError }: UseBibleToolsGenerationParams) {
+  const handleGetDevotional = useCallback(async () => {
+    setDevotionalLoading(true);
+    setDevotionalError("");
+    setDevotional(null);
+    try {
+      const res = await fetch("/api/bible/devotional");
+      if (!res.ok) throw new Error("Failed to fetch devotional");
+      const data = await res.json();
+      setDevotional(data);
+    } catch (e: any) {
+      setDevotionalError(e.message || "Failed to fetch devotional");
+    } finally {
+      setDevotionalLoading(false);
+    }
+  }, [setDevotional, setDevotionalLoading, setDevotionalError]);
+
+  const handleStudy = useCallback(async (studyInput: string, studyType: string) => {
+    if (!studyInput.trim()) return;
+    setStudyLoading(true);
+    setStudyError("");
+    setStudyResult(null);
+    try {
+      const res = await fetch("/api/bible/study", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ verse: studyInput, reference: studyInput, studyType }),
+      });
+      if (!res.ok) throw new Error("Failed to generate study");
+      const data = await res.json();
+      setStudyResult(data);
+    } catch (e: any) {
+      setStudyError(e.message || "Failed to generate study");
+    } finally {
+      setStudyLoading(false);
+    }
+  }, [setStudyResult, setStudyLoading, setStudyError]);
+
+  return { handleGetDevotional, handleStudy };
+}
 
 export default function AIBibleTools() {
   const [activeTab, setActiveTab] = useState("search")
@@ -27,6 +77,9 @@ export default function AIBibleTools() {
   const [studyLoading, setStudyLoading] = useState(false)
   const [studyError, setStudyError] = useState("")
 
+  // Place this after all state declarations
+  const { handleGetDevotional, handleStudy } = useBibleToolsGeneration({ setDevotional, setDevotionalLoading, setDevotionalError, setStudyResult, setStudyLoading, setStudyError });
+
   // --- Handlers ---
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
@@ -46,43 +99,6 @@ export default function AIBibleTools() {
       setSearchError(e.message || "Search failed")
     } finally {
       setSearchLoading(false)
-    }
-  }
-
-  const handleGetDevotional = async () => {
-    setDevotionalLoading(true)
-    setDevotionalError("")
-    setDevotional(null)
-    try {
-      const res = await fetch("/api/bible/devotional")
-      if (!res.ok) throw new Error("Failed to fetch devotional")
-      const data = await res.json()
-      setDevotional(data)
-    } catch (e: any) {
-      setDevotionalError(e.message || "Failed to fetch devotional")
-    } finally {
-      setDevotionalLoading(false)
-    }
-  }
-
-  const handleStudy = async () => {
-    if (!studyInput.trim()) return
-    setStudyLoading(true)
-    setStudyError("")
-    setStudyResult(null)
-    try {
-      const res = await fetch("/api/bible/study", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ verse: studyInput, reference: studyInput, studyType }),
-      })
-      if (!res.ok) throw new Error("Failed to generate study")
-      const data = await res.json()
-      setStudyResult(data)
-    } catch (e: any) {
-      setStudyError(e.message || "Failed to generate study")
-    } finally {
-      setStudyLoading(false)
     }
   }
 
@@ -189,7 +205,7 @@ export default function AIBibleTools() {
                     <option value="theological">Theological</option>
                     <option value="practical">Practical</option>
                   </select>
-                  <Button onClick={handleStudy} disabled={studyLoading || !studyInput.trim()}>
+                  <Button onClick={() => handleStudy(studyInput, studyType)} disabled={studyLoading || !studyInput.trim()}>
                     {studyLoading ? "Analyzing..." : "Analyze"}
                   </Button>
                 </div>

@@ -1,41 +1,63 @@
 "use client"
 
 import { DialogShell } from "./_shared/dialog-shell"
-import { DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Calendar, Mail, Phone, MapPin, User, Briefcase, Heart, MessageSquare } from "lucide-react"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { useState, useEffect, useRef } from "react"
+import { MemberService } from "@/lib/member-service"
+import { QRCodeCanvas } from "qrcode.react"
+// @ts-ignore
+import html2canvas from 'html2canvas'
+import { DatabaseService } from "@/lib/database"
 
 interface ViewMemberModalProps {
   memberId: string
 }
 
 export function ViewMemberModal({ memberId }: ViewMemberModalProps) {
-  const member = {
-    id: memberId,
-    name: "Sample Member",
-    first_name: "John",
-    last_name: "Doe",
-    email: "john@example.com",
-    phone: "+1234567890",
-    address: "123 Main St",
-    gender: "male",
-    marital_status: "single",
-    occupation: "Engineer",
-    department: "IT",
-    emergency_contact: "Jane Doe",
-    notes: "Sample notes",
-    member_status: "active",
-    profile_image: "/placeholder.svg",
-    date_of_birth: "1990-01-01",
-    baptism_date: "2020-01-01",
-    join_date: "2020-01-01",
-  }
+  // All hooks at the top!
+  const [member, setMember] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<'attachments' | 'fields' | 'tags'>('attachments')
+  const [attachments, setAttachments] = useState<any[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [customFields, setCustomFields] = useState<any[]>([])
+  const [memberFields, setMemberFields] = useState<any[]>([])
+  const [tags, setTags] = useState<string[]>([])
+  const [allTags, setAllTags] = useState<string[]>([])
+  const [newTag, setNewTag] = useState("")
+  const dropRef = useRef<HTMLDivElement>(null)
+  const [dragActive, setDragActive] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const [open, setOpen] = useState(true)
+  const [showCard, setShowCard] = useState(false)
+  const cardRef = useRef<HTMLDivElement>(null)
 
-  if (!member) return null
+  useEffect(() => {
+    setLoading(true)
+    DatabaseService.getMemberById(memberId).then(m => {
+      setMember(m)
+      setLoading(false)
+    })
+  }, [memberId])
+  useEffect(() => {
+    MemberService.getAttachments(memberId).then((r: any) => setAttachments(r.attachments || []))
+    MemberService.getCustomFields().then((r: any) => setCustomFields(r.customFields || []))
+    MemberService.getMemberCustomFields(memberId).then((r: any) => setMemberFields(r.fields || []))
+    MemberService.getTags(memberId).then((r: any) => setTags(r.tags || []))
+    MemberService.getTags().then((r: any) => setAllTags(r.tags || []))
+  }, [memberId])
+
+  // Only after all hooks:
+  if (loading) return <div>Loading...</div>
+  if (!member) return <div>Member not found.</div>
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -61,9 +83,7 @@ export function ViewMemberModal({ memberId }: ViewMemberModalProps) {
   }
 
   return (
-    <DialogShell title="Member Details" triggerLabel="View">
-      <p className="font-medium">ID: {member.id}</p>
-      <p className="truncate">Name: {member.name}</p>
+    <DialogShell title="Member Details" isOpen={open} onClose={() => setOpen(false)}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Detalhes do Membro</DialogTitle>
@@ -230,11 +250,164 @@ export function ViewMemberModal({ memberId }: ViewMemberModalProps) {
             </Card>
           )}
 
+          {/* --- New Tabs Section --- */}
+          <Tabs value={tab} onValueChange={v => setTab(v as 'attachments' | 'fields' | 'tags')} className="mt-6">
+            <TabsList>
+              <TabsTrigger value="attachments">Anexos</TabsTrigger>
+              <TabsTrigger value="fields">Campos Personalizados</TabsTrigger>
+              <TabsTrigger value="tags">Tags</TabsTrigger>
+            </TabsList>
+            <TabsContent value="attachments">
+              <div
+                ref={dropRef}
+                className={`mb-2 flex items-center gap-2 border-2 ${dragActive ? 'border-blue-500 bg-blue-50' : 'border-dashed border-gray-300'} rounded p-4 transition-colors`}
+                onDragOver={e => { e.preventDefault(); setDragActive(true) }}
+                onDragLeave={e => { e.preventDefault(); setDragActive(false) }}
+                onDrop={async e => {
+                  e.preventDefault(); setDragActive(false)
+                  const files = Array.from(e.dataTransfer.files)
+                  for (const file of files) {
+                    setUploading(true)
+                    setUploadProgress(0)
+                    // Use XMLHttpRequest for progress
+                    await new Promise<void>((resolve, reject) => {
+                      const xhr = new XMLHttpRequest()
+                      xhr.open('POST', '/api/member-attachments')
+                      xhr.upload.onprogress = (event) => {
+                        if (event.lengthComputable) setUploadProgress(Math.round((event.loaded / event.total) * 100))
+                      }
+                      xhr.onload = () => { setUploadProgress(null); setUploading(false); resolve() }
+                      xhr.onerror = () => { setUploadProgress(null); setUploading(false); reject() }
+                      const formData = new FormData()
+                      formData.append('memberId', memberId)
+                      formData.append('file', file)
+                      xhr.send(formData)
+                    })
+                  }
+                  MemberService.getAttachments(memberId).then((r: any) => setAttachments(r.attachments || []))
+                }}
+              >
+                <span className="text-gray-500">Arraste arquivos aqui ou clique para selecionar</span>
+                {uploadProgress !== null && <span className="ml-2 text-blue-600">{uploadProgress}%</span>}
+                <input type="file" id="member-attachment-upload" style={{ display: 'none' }} onChange={async e => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  setUploading(true)
+                  await MemberService.uploadAttachment(memberId, file)
+                  setUploading(false)
+                  MemberService.getAttachments(memberId).then((r: any) => setAttachments(r.attachments || []))
+                }} />
+                <Button size="sm" onClick={() => document.getElementById('member-attachment-upload')?.click()} disabled={uploading}>
+                  {uploading ? 'Enviando...' : 'Upload Anexo'}
+                </Button>
+              </div>
+              <ul className="space-y-2">
+                {attachments.map(att => (
+                  <li key={att.id} className="flex items-center gap-2 border rounded p-2">
+                    <a href={att.file_url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate">{att.file_name}</a>
+                    <span className="text-xs text-gray-500">{Math.round((att.file_size || 0)/1024)} KB</span>
+                    <Button size="sm" variant="destructive" onClick={async () => {
+                      await MemberService.deleteAttachment(att.id)
+                      MemberService.getAttachments(memberId).then(r => setAttachments(r.attachments || []))
+                    }}>Excluir</Button>
+                  </li>
+                ))}
+                {attachments.length === 0 && <li className="text-sm text-gray-500">Nenhum anexo.</li>}
+              </ul>
+            </TabsContent>
+            <TabsContent value="fields">
+              <ul className="space-y-2">
+                {customFields.map(field => {
+                  const value = memberFields.find((f: any) => f.field_id === field.id)?.value || ""
+                  return (
+                    <li key={field.id} className="flex items-center gap-2">
+                      <span className="w-48 font-medium">{field.name}</span>
+                      <Input
+                        value={value}
+                        onChange={e => {
+                          MemberService.setMemberCustomField(memberId, field.id, e.target.value)
+                          setMemberFields(f => f.map((mf: any) => mf.field_id === field.id ? { ...mf, value: e.target.value } : mf))
+                        }}
+                        className="flex-1"
+                      />
+                      {value && (
+                        <Button size="sm" variant="outline" onClick={async () => {
+                          await MemberService.deleteMemberCustomField(memberId, field.id)
+                          MemberService.getMemberCustomFields(memberId).then(r => setMemberFields(r.fields || []))
+                        }}>Limpar</Button>
+                      )}
+                    </li>
+                  )
+                })}
+                {customFields.length === 0 && <li className="text-sm text-gray-500">Nenhum campo personalizado.</li>}
+              </ul>
+            </TabsContent>
+            <TabsContent value="tags">
+              <div className="flex flex-wrap gap-2 mb-2">
+                {tags.map(tag => (
+                  <Badge key={tag} variant="secondary" className="flex items-center gap-1">
+                    {tag}
+                    <Button size="sm" variant="ghost" onClick={async () => {
+                      await MemberService.removeTag(memberId, tag)
+                      MemberService.getTags(memberId).then((r: any) => setTags(r.tags || []))
+                    }}>x</Button>
+                  </Badge>
+                ))}
+              </div>
+              <form className="flex gap-2" onSubmit={async e => {
+                e.preventDefault()
+                if (!newTag.trim()) return
+                await MemberService.addTag(memberId, newTag.trim())
+                setNewTag("")
+                MemberService.getTags(memberId).then(r => setTags(r.tags || []))
+              }}>
+                <Input value={newTag} onChange={e => setNewTag(e.target.value)} placeholder="Adicionar tag..." className="w-48" list="all-member-tags" />
+                <datalist id="all-member-tags">
+                  {allTags.map(tag => <option key={tag} value={tag} />)}
+                </datalist>
+                <Button size="sm" type="submit">Adicionar</Button>
+              </form>
+            </TabsContent>
+          </Tabs>
+          {/* --- End Tabs Section --- */}
           <div className="flex justify-end">
-            <Button onClick={() => window.close()}>Fechar</Button>
+            <Button onClick={() => setOpen(false)}>Fechar</Button>
           </div>
         </div>
       </DialogContent>
+      <div className="flex flex-col items-center gap-2 my-4">
+        <QRCodeCanvas value={`${window.location.origin}/checkin/${member.id}`} size={96} />
+        <Button size="sm" variant="outline" onClick={() => setShowCard(true)}>Gerar Carteirinha</Button>
+      </div>
+      {/* Membership Card Modal */}
+      <Dialog open={showCard} onOpenChange={setShowCard}>
+        <DialogContent className="max-w-md p-0 bg-gray-100">
+          <div ref={cardRef} className="bg-white rounded shadow p-6 flex flex-col items-center gap-4 w-[340px]">
+            <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-blue-500">
+              <img src={member.profile_image || '/placeholder-user.jpg'} alt="Foto" className="w-full h-full object-cover" />
+            </div>
+            <div className="text-center">
+              <div className="font-bold text-lg">{member.first_name} {member.last_name}</div>
+              <div className="text-sm text-gray-600">ID: {member.id}</div>
+              <div className="text-sm text-gray-600">{member.email}</div>
+              <div className="text-sm text-gray-600">{member.phone}</div>
+            </div>
+            <QRCodeCanvas value={`${window.location.origin}/checkin/${member.id}`} size={128} />
+            <div className="text-xs text-gray-400 mt-2">Apresente este QR code para check-in</div>
+          </div>
+          <div className="flex gap-2 justify-center mt-4">
+            <Button size="sm" variant="outline" onClick={() => window.print()}>Imprimir</Button>
+            <Button size="sm" variant="default" onClick={async () => {
+              if (!cardRef.current) return
+              const canvas = await html2canvas(cardRef.current)
+              const link = document.createElement('a')
+              link.download = `carteirinha-${member.id}.png`
+              link.href = canvas.toDataURL()
+              link.click()
+            }}>Download Card</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DialogShell>
   )
 }

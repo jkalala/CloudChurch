@@ -1,0 +1,29 @@
+{
+  "aiMusic": {
+    "songs": "Songs",
+    "setLists": "SetLists",
+    "musicians": "Musicians",
+    "rehearsals": "Rehearsals",
+    "mostPopularSongs": "Most Popular Songs",
+    "viewDetails": "View Details",
+    "viewDetailsTooltip": "View full details, lyrics, and chords for this song.",
+    "playbackStarted": "Playback started",
+    "playbackStopped": "Playback stopped",
+    "playingPreview": "Playing song preview",
+    "stoppedPlaying": "Stopped playing song preview",
+    "generateSetList": "Generate SetList",
+    "addSong": "Add Song",
+    "filters": "Filters",
+    "recommend": "Recommend",
+    "play": "Play",
+    "pause": "Pause",
+    "download": "Download",
+    "downloadTooltip": "Download this song as MP3.",
+    "share": "Share",
+    "searchSongs": "Search Songs",
+    "scheduleMusiciansDate": "Schedule Date",
+    "onboardingTitle": "Welcome to AI Music Ministry Tools!",
+    "onboardingDesc": "Explore AI-powered music planning, setlists, and more. Hover over icons for tips.",
+    "dismiss": "Dismiss"
+  }
+} 

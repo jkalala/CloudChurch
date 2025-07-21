@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,65 @@ import { useTranslation } from "@/lib/i18n"
 import { useAuth } from "@/components/auth-provider"
 import { toast } from "@/hooks/use-toast"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+
+// Custom hook for worship set generation logic
+interface UseWorshipSetGenerationParams {
+  worshipSets: WorshipSet[];
+  setWorshipSets: React.Dispatch<React.SetStateAction<WorshipSet[]>>;
+  setSelectedSet: React.Dispatch<React.SetStateAction<WorshipSet | null>>;
+  setIsGenerating: React.Dispatch<React.SetStateAction<boolean>>;
+  plannerConfig: {
+    theme: string;
+    date: string;
+    duration: number;
+    language: "pt" | "en" | "fr";
+    includeHymns: boolean;
+    tempoPreference: "slow" | "medium" | "fast" | "mixed";
+    difficultyLevel: "easy" | "medium" | "hard";
+  };
+}
+export function useWorshipSetGeneration({ worshipSets, setWorshipSets, setSelectedSet, setIsGenerating, plannerConfig }: UseWorshipSetGenerationParams) {
+  const handleGenerateWorshipSet = useCallback(async () => {
+    if (!plannerConfig.theme.trim()) {
+      toast({
+        title: "Missing Theme",
+        description: "Please enter a worship theme.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsGenerating(true);
+    try {
+      const worshipSet = await AIWorshipPlanner.generateWorshipSet(
+        plannerConfig.date,
+        plannerConfig.theme,
+        plannerConfig.language,
+        plannerConfig.duration,
+        {
+          includeHymns: plannerConfig.includeHymns,
+          tempoPreference: plannerConfig.tempoPreference === "mixed" ? undefined : plannerConfig.tempoPreference,
+          difficultyLevel: plannerConfig.difficultyLevel,
+        },
+      );
+      setWorshipSets([worshipSet, ...worshipSets]);
+      setSelectedSet(worshipSet);
+      toast({
+        title: "Worship Set Generated",
+        description: `Created a ${worshipSet.songs.length}-song worship set for \"${plannerConfig.theme}\".`,
+      });
+    } catch (error) {
+      console.error("Error generating worship set:", error);
+      toast({
+        title: "Generation Failed",
+        description: "Failed to generate worship set. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [plannerConfig, worshipSets, setWorshipSets, setSelectedSet, setIsGenerating]);
+  return { handleGenerateWorshipSet };
+}
 
 export default function AIWorshipPlannerComponent() {
   const [worshipSets, setWorshipSets] = useState<WorshipSet[]>([])
@@ -33,48 +92,7 @@ export default function AIWorshipPlannerComponent() {
   const { language } = useAuth()
   const { t } = useTranslation(language)
 
-  const handleGenerateWorshipSet = async () => {
-    if (!plannerConfig.theme.trim()) {
-      toast({
-        title: "Missing Theme",
-        description: "Please enter a worship theme.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsGenerating(true)
-    try {
-      const worshipSet = await AIWorshipPlanner.generateWorshipSet(
-        plannerConfig.date,
-        plannerConfig.theme,
-        plannerConfig.language,
-        plannerConfig.duration,
-        {
-          includeHymns: plannerConfig.includeHymns,
-          tempoPreference: plannerConfig.tempoPreference === "mixed" ? undefined : plannerConfig.tempoPreference,
-          difficultyLevel: plannerConfig.difficultyLevel,
-        },
-      )
-
-      setWorshipSets([worshipSet, ...worshipSets])
-      setSelectedSet(worshipSet)
-
-      toast({
-        title: "Worship Set Generated",
-        description: `Created a ${worshipSet.songs.length}-song worship set for "${plannerConfig.theme}".`,
-      })
-    } catch (error) {
-      console.error("Error generating worship set:", error)
-      toast({
-        title: "Generation Failed",
-        description: "Failed to generate worship set. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsGenerating(false)
-    }
-  }
+  const { handleGenerateWorshipSet } = useWorshipSetGeneration({ worshipSets, setWorshipSets, setSelectedSet, setIsGenerating, plannerConfig });
 
   const getTempoIcon = (tempo: string) => {
     switch (tempo) {

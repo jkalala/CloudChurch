@@ -8,15 +8,25 @@ export async function getUserRoleFromRequest(request: NextRequest): Promise<stri
     return [k, decodeURIComponent(v.join('='))]
   }))
   const accessToken = cookies["sb-access-token"] || cookies["access_token"]
-  if (!accessToken) return null
+  if (!accessToken) {
+    console.log("[auth-helpers] No access token found in cookies");
+    return null
+  }
   const supabase = createServerClient()
   const { data: { user }, error: userError } = await supabase.auth.getUser(accessToken)
-  if (userError || !user) return null
+  if (userError || !user) {
+    console.log("[auth-helpers] User not found or error:", userError);
+    return null
+  }
   const { data: profile, error: profileError } = await supabase
     .from("user_profiles")
     .select("role")
     .eq("user_id", user.id)
     .single()
-  if (profileError || !profile) return null
+  if (profileError || !profile) {
+    console.log("[auth-helpers] Profile not found or error:", profileError);
+    return null
+  }
+  console.log(`[auth-helpers] User role for user_id ${user.id}:`, profile.role);
   return profile.role || null
 } 

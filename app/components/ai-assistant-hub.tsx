@@ -34,48 +34,48 @@ export default function AIAssistantHub() {
   const features = [
     {
       icon: <MessageSquare className="h-5 w-5" />,
-      title: "Natural Language Queries",
-      description: "Ask questions in plain English, Portuguese, or French",
+      title: t("aiAssistant.features.naturalLanguageQueries"),
+      description: t("aiAssistant.features.naturalLanguageQueriesDesc"),
     },
     {
       icon: <BarChart3 className="h-5 w-5" />,
-      title: "Predictive Analytics",
-      description: "Forecast attendance, growth, and engagement trends",
+      title: t("aiAssistant.features.predictiveAnalytics"),
+      description: t("aiAssistant.features.predictiveAnalyticsDesc"),
     },
     {
       icon: <Lightbulb className="h-5 w-5" />,
-      title: "Smart Recommendations",
-      description: "Get personalized suggestions for church management",
+      title: t("aiAssistant.features.smartRecommendations"),
+      description: t("aiAssistant.features.smartRecommendationsDesc"),
     },
     {
       icon: <Mic className="h-5 w-5" />,
-      title: "Voice Commands",
-      description: "Speak your questions for hands-free interaction",
+      title: t("aiAssistant.features.voiceCommands"),
+      description: t("aiAssistant.features.voiceCommandsDesc"),
     },
     {
       icon: <Mail className="h-5 w-5" />,
-      title: "AI Email Generation",
-      description: "Create personalized pastoral emails automatically",
+      title: t("aiAssistant.features.aiEmailGeneration"),
+      description: t("aiAssistant.features.aiEmailGenerationDesc"),
     },
     {
       icon: <Music className="h-5 w-5" />,
-      title: "Worship Planning",
-      description: "Generate intelligent worship sets with song suggestions",
+      title: t("aiAssistant.features.worshipPlanning"),
+      description: t("aiAssistant.features.worshipPlanningDesc"),
     },
     {
       icon: <BookOpen className="h-5 w-5" />,
-      title: "Sermon Assistant",
-      description: "Create sermon outlines and find relevant Bible verses",
+      title: t("aiAssistant.features.sermonAssistant"),
+      description: t("aiAssistant.features.sermonAssistantDesc"),
     },
     {
       icon: <Users className="h-5 w-5" />,
-      title: "Member Insights",
-      description: "Identify members who need pastoral care",
+      title: t("aiAssistant.features.memberInsights"),
+      description: t("aiAssistant.features.memberInsightsDesc"),
     },
     {
       icon: <TrendingUp className="h-5 w-5" />,
-      title: "Growth Analysis",
-      description: "Track and predict church growth patterns",
+      title: t("aiAssistant.features.growthAnalysis"),
+      description: t("aiAssistant.features.growthAnalysisDesc"),
     },
   ]
 
@@ -98,9 +98,9 @@ export default function AIAssistantHub() {
           </div>
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              AI Church Assistant
+              {t("aiAssistant.title")}
             </h1>
-            <p className="text-gray-600">Intelligent insights and assistance for modern church management</p>
+            <p className="text-gray-600">{t("aiAssistant.subtitle")}</p>
           </div>
         </div>
 

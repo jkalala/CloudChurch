@@ -592,6 +592,7 @@ export class AIMusicMinistry {
         ],
         createdAt: "2024-01-01T00:00:00Z",
         updatedAt: "2024-01-01T00:00:00Z",
+        audioUrl: "/audio/amazing-grace.mp3", // <-- Add a valid audio file path or URL
       },
       {
         id: "song-2",
@@ -624,6 +625,7 @@ export class AIMusicMinistry {
         ],
         createdAt: "2024-01-01T00:00:00Z",
         updatedAt: "2024-01-01T00:00:00Z",
+        audioUrl: "/audio/how-great-thou-art.mp3", // <-- Add a valid audio file path or URL
       },
     ]
   }

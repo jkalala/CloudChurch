@@ -36,6 +36,7 @@ import {
   type VolunteerProfile,
   type CommunityPartnership,
 } from "@/lib/outreach-crm-service"
+import { useTranslation } from "@/lib/i18n";
 
 export default function OutreachCRMDashboard() {
   const [contacts, setContacts] = useState<CommunityContact[]>([])
@@ -47,6 +48,7 @@ export default function OutreachCRMDashboard() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const { t } = useTranslation();
 
   useEffect(() => {
     loadData()
@@ -129,17 +131,17 @@ export default function OutreachCRMDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Community Outreach CRM</h2>
-          <p className="text-gray-600">Manage community relationships and outreach programs</p>
+          <h2 className="text-2xl font-bold text-gray-900">{t("outreachCRM.title")}</h2>
+          <p className="text-gray-600">{t("outreachCRM.description")}</p>
         </div>
         <div className="flex gap-2">
           <Button className="bg-indigo-600 hover:bg-indigo-700">
             <Plus className="h-4 w-4 mr-2" />
-            Add Contact
+            {t("outreachCRM.addContact")}
           </Button>
           <Button variant="outline" className="bg-white/80 text-gray-700">
             <UserPlus className="h-4 w-4 mr-2" />
-            New Program
+            {t("outreachCRM.newProgram")}
           </Button>
         </div>
       </div>

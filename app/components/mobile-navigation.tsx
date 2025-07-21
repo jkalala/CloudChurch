@@ -47,14 +47,14 @@ import LanguageSelector from "./language-selector"
 interface MobileNavigationProps {
   onClose?: () => void
   language?: string
+  router?: { push: (route: string) => void }
 }
 
-export default function MobileNavigation({ onClose, language }: MobileNavigationProps) {
-  const router = useRouter()
+export default function MobileNavigation({ onClose, router: injectedRouter }: MobileNavigationProps) {
+  const router = injectedRouter || useRouter()
   const [activeSection, setActiveSection] = useState("dashboard")
-  const [currentLanguage, setCurrentLanguage] = useState<Language>((language as Language) || "pt")
-  const { user, signOut } = useAuth()
-  const { t } = useTranslation(currentLanguage)
+  const { language, setLanguage, user, signOut } = useAuth()
+  const { t } = useTranslation(language)
 
   // Get feature flags
   const features = useFeatures([
@@ -334,6 +334,7 @@ export default function MobileNavigation({ onClose, language }: MobileNavigation
   ]
 
   const handleNavigation = (id: string, route?: string) => {
+    console.log('handleNavigation called', id, route);
     setActiveSection(id)
     if (route) {
       router.push(route)
@@ -341,12 +342,6 @@ export default function MobileNavigation({ onClose, language }: MobileNavigation
       router.push("/dashboard")
     }
     onClose?.()
-  }
-
-  const handleLanguageChange = (newLanguage: Language) => {
-    setCurrentLanguage(newLanguage)
-    // You might want to save this to localStorage or context
-    localStorage.setItem("preferred-language", newLanguage)
   }
 
   const handleLogout = async () => {
@@ -425,8 +420,8 @@ export default function MobileNavigation({ onClose, language }: MobileNavigation
             <span>{t("language")}</span>
           </div>
           <LanguageSelector
-            currentLanguage={currentLanguage}
-            onLanguageChange={handleLanguageChange}
+            currentLanguage={language}
+            onLanguageChange={setLanguage}
             variant="button"
             size="sm"
           />

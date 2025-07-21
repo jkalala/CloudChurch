@@ -28,13 +28,14 @@ import {
   Contact,
   SortAsc,
   SortDesc,
-  Calendar,
+  Calendar as CalendarIcon,
   Phone,
   Mail,
   MapPin,
   Cake,
   Building2,
   Camera,
+  Bell,
 } from "lucide-react"
 import { DatabaseService, type Member } from "@/lib/database"
 import { AddMemberModal } from "./add-member-modal"
@@ -56,6 +57,14 @@ import MemberFilters from "./member-filters"
 import Papa from "papaparse"
 // @ts-ignore: xlsx types may not be available
 import * as XLSX from "xlsx"
+import { createClientComponentClient } from "@/lib/supabase-client"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { X } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { MemberService } from "@/lib/member-service"
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartTooltip, ResponsiveContainer } from "recharts"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 type ViewMode = "cards" | "table" | "grid" | "list" | "compact" | "contact"
 type SortField = "name" | "email" | "joinDate" | "department" | "status"
@@ -65,9 +74,9 @@ interface MemberManagementProps {
   language?: Language
 }
 
-export default function MemberManagement({ language = "pt" }: MemberManagementProps) {
+export default function MemberManagement() {
+  const { language, userProfile } = useAuth();
   const { t } = useTranslation(language)
-  const { userProfile } = useAuth()
   const userRole = userProfile?.role || "member"
   const [members, setMembers] = useState<Member[]>([])
   const [filteredMembers, setFilteredMembers] = useState<Member[]>([])
@@ -89,16 +98,147 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
   const [showDeptModal, setShowDeptModal] = useState(false)
   const [filters, setFilters] = useState<any>({})
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const supabase = createClientComponentClient()
+  const [showFilterBar, setShowFilterBar] = useState(false)
+  const [joinDateRange, setJoinDateRange] = useState<{ from: Date | undefined, to: Date | undefined }>({ from: undefined, to: undefined })
+  const [birthdayMonth, setBirthdayMonth] = useState<string>("")
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null)
+  const [editFields, setEditFields] = useState<Partial<Member>>({})
+  const [editLoading, setEditLoading] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const editInputRef = useRef<HTMLInputElement>(null)
+  const [auditLogs, setAuditLogs] = useState<any[]>([])
+  const [loadingAudit, setLoadingAudit] = useState(false)
+  const [suggestionModal, setSuggestionModal] = useState<{ open: boolean; suggestions: string[] }>({ open: false, suggestions: [] })
+  const [notes, setNotes] = useState<any[]>([])
+  const [newNote, setNewNote] = useState("")
+  const [loadingNotes, setLoadingNotes] = useState(false)
+  const fetchNotes = async (memberId: string) => {
+    setLoadingNotes(true)
+    const res = await fetch(`/api/member-notes?memberId=${memberId}`)
+    const data = await res.json()
+    setNotes(data.notes || [])
+    setLoadingNotes(false)
+  }
+  const addNote = async (memberId: string) => {
+    if (!newNote.trim()) return
+    await fetch(`/api/member-notes`, { method: 'POST', body: JSON.stringify({ memberId, content: newNote }) })
+    setNewNote("")
+    fetchNotes(memberId)
+  }
+  const deleteNote = async (noteId: string, memberId: string) => {
+    await fetch(`/api/member-notes?noteId=${noteId}`, { method: 'DELETE' })
+    fetchNotes(memberId)
+  }
+  const getSmartSuggestions = async (member: any) => {
+    const res = await fetch('/api/ai/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: `Suggest best department, next action, and similar members for: ${JSON.stringify(member)}` }) })
+    const data = await res.json()
+    setSuggestionModal({ open: true, suggestions: data.response ? data.response.split('\n') : [] })
+  }
+
+  const [allTags, setAllTags] = useState<string[]>([])
+  const [tagFilter, setTagFilter] = useState<string>("")
+  useEffect(() => {
+    MemberService.getTags().then((r: any) => setAllTags(r.tags || []))
+  }, [])
+
+  const [showCustomFieldsModal, setShowCustomFieldsModal] = useState(false)
+  const [customFields, setCustomFields] = useState<any[]>([])
+  const [newField, setNewField] = useState({ name: '', field_type: 'text', options: '' })
+  const [loadingFields, setLoadingFields] = useState(false)
+  const isAdmin = userRole === 'admin'
+  useEffect(() => {
+    if (showCustomFieldsModal) {
+      setLoadingFields(true)
+      MemberService.getCustomFields().then((r: any) => {
+        setCustomFields(r.customFields || [])
+        setLoadingFields(false)
+      })
+    }
+  }, [showCustomFieldsModal])
+
+  const [bulkTag, setBulkTag] = useState("")
+  const isMobile = useIsMobile()
+  const [showDuplicatesModal, setShowDuplicatesModal] = useState(false)
+  const [duplicates, setDuplicates] = useState<any[]>([])
+  // Helper to find duplicates
+  function findDuplicates(members: Member[]) {
+    const byEmail = new Map<string, Member[]>()
+    const byPhone = new Map<string, Member[]>()
+    const byName = new Map<string, Member[]>()
+    members.forEach(m => {
+      if (m.email) byEmail.set(m.email, [...(byEmail.get(m.email) || []), m])
+      if (m.phone) byPhone.set(m.phone, [...(byPhone.get(m.phone) || []), m])
+      const nameKey = (m.first_name + ' ' + m.last_name).toLowerCase()
+      byName.set(nameKey, [...(byName.get(nameKey) || []), m])
+    })
+    const dups: any[] = []
+    for (const group of [byEmail, byPhone, byName]) {
+      for (const arr of group.values()) {
+        if (arr.length > 1) dups.push(arr)
+      }
+    }
+    return dups
+  }
+
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  // Simulate notification generation (in real app, use backend or websocket)
+  useEffect(() => {
+    // Birthday reminders
+    const today = new Date()
+    const upcomingBirthdays = members.filter(m => m.date_of_birth && new Date(m.date_of_birth).getMonth() === today.getMonth() && new Date(m.date_of_birth).getDate() === today.getDate())
+    if (upcomingBirthdays.length > 0) {
+      setNotifications(n => [
+        ...n,
+        ...upcomingBirthdays.map(m => ({
+          type: 'birthday',
+          message: `Aniversário de ${m.first_name} ${m.last_name} hoje!`,
+          date: today.toISOString(),
+          read: false,
+        }))
+      ])
+      setUnreadCount(c => c + upcomingBirthdays.length)
+    }
+    // New member joins (simulate: last 24h)
+    const newMembers = members.filter(m => {
+      const joined = new Date(m.join_date)
+      return (today.getTime() - joined.getTime()) < 24 * 60 * 60 * 1000
+    })
+    if (newMembers.length > 0) {
+      setNotifications(n => [
+        ...n,
+        ...newMembers.map(m => ({
+          type: 'new',
+          message: `Novo membro: ${m.first_name} ${m.last_name}`,
+          date: m.join_date,
+          read: false,
+        }))
+      ])
+      setUnreadCount(c => c + newMembers.length)
+    }
+    // Status changes (simulate: if status changed in last 24h)
+    // (In real app, track status change events)
+  }, [members])
 
   // Load members on component mount
   useEffect(() => {
     loadMembers()
   }, [])
 
+  useEffect(() => {
+    const channel = supabase.channel('members-realtime')
+    channel.on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, () => {
+      loadMembers()
+    })
+    channel.subscribe()
+    return () => { channel.unsubscribe() }
+  }, [])
+
   // Filter and sort members when dependencies change
   useEffect(() => {
     filterAndSortMembers()
-  }, [members, searchTerm, activeTab, sortField, sortOrder])
+  }, [members, searchTerm, activeTab, sortField, sortOrder, filters, tagFilter])
 
   const loadMembers = async () => {
     try {
@@ -174,34 +314,52 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
       }
     })
 
+    if (filters.joinDateFrom || filters.joinDateTo) {
+      filtered = filtered.filter((member) => {
+        const joinDate = new Date(member.join_date)
+        if (filters.joinDateFrom && joinDate < new Date(filters.joinDateFrom)) return false
+        if (filters.joinDateTo && joinDate > new Date(filters.joinDateTo)) return false
+        return true
+      })
+    }
+    if (filters.birthdayMonth) {
+      filtered = filtered.filter((member) => {
+        if (!member.date_of_birth) return false
+        const birthDate = new Date(member.date_of_birth)
+        return String(birthDate.getMonth() + 1).padStart(2, '0') === filters.birthdayMonth
+      })
+    }
+    if (tagFilter) {
+      filtered = filtered.filter((member: any) => Array.isArray(member.tags) && member.tags.includes(tagFilter))
+    }
+
     setFilteredMembers(filtered)
   }
 
-  const getMemberStats = () => {
-    const total = members.length
-    const active = members.filter((m) => m.member_status === "active").length
-    const inactive = members.filter((m) => m.member_status === "inactive").length
-    const newThisMonth = members.filter((m) => {
-      const joinDate = new Date(m.join_date)
-      const now = new Date()
-      return joinDate.getMonth() === now.getMonth() && joinDate.getFullYear() === now.getFullYear()
-    }).length
-
-    const departments = new Set(members.map((m) => m.department)).size
-    const birthdaysThisMonth = members.filter((m) => {
-      if (!m.date_of_birth) return false
-      const birthDate = new Date(m.date_of_birth)
-      const now = new Date()
-      return birthDate.getMonth() === now.getMonth()
-    }).length
-
-    return { total, active, inactive, newThisMonth, departments, birthdaysThisMonth }
+  // Analytics calculations
+  const stats = {
+    total: members.length,
+    active: members.filter(m => m.member_status === 'active').length,
+    inactive: members.filter(m => m.member_status === 'inactive').length,
+    newThisMonth: members.filter(m => new Date(m.join_date).getMonth() === new Date().getMonth() && new Date(m.join_date).getFullYear() === new Date().getFullYear()).length,
+    birthdaysThisMonth: members.filter(m => m.date_of_birth && new Date(m.date_of_birth).getMonth() === new Date().getMonth()).length,
+    tagCounts: (() => {
+      const counts: Record<string, number> = {}
+      members.forEach(m => (m.tags || []).forEach(tag => { counts[tag] = (counts[tag] || 0) + 1 }))
+      return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5)
+    })(),
+    newPerMonth: (() => {
+      const months: Record<string, number> = {}
+      members.forEach(m => {
+        const ym = m.join_date ? m.join_date.slice(0, 7) : ''
+        if (ym) months[ym] = (months[ym] || 0) + 1
+      })
+      return Object.entries(months).sort().map(([month, count]) => ({ month, count }))
+    })(),
   }
 
-  const stats = getMemberStats()
-
   const handleAddMember = (memberData: Partial<Member>) => {
-    toast({ title: "Add Member triggered" });
+    toast({ title: t("members.actions.addMemberTriggered") });
     // Ensure id is string if present
     if (memberData.id && typeof memberData.id === 'number') {
       memberData.id = String(memberData.id)
@@ -217,20 +375,20 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
   }
 
   const addMemberAsync = async (memberData: Partial<Member>) => {
-    // Ensure id is string if present
-    if (memberData.id && typeof memberData.id === 'number') {
-      memberData.id = String(memberData.id)
-    }
-    // Ensure department is always a string
-    if (typeof memberData.department === 'undefined') {
-      memberData.department = ''
-    }
     try {
-      const newMember = await DatabaseService.createMember(memberData)
-      setMembers([newMember, ...members])
+      const res = await fetch('/api/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(memberData),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to add member')
+      await loadMembers()
       setShowAddModal(false)
-    } catch (error) {
+      toast({ title: t("members.actions.addMemberSuccess"), description: `${data.first_name} ${data.last_name} added successfully!` })
+    } catch (error: any) {
       console.error("Error adding member:", error)
+      toast({ title: t("members.actions.addMemberError"), description: error.message || String(error), variant: "destructive" })
     }
   }
 
@@ -249,10 +407,18 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
 
   const handleDeleteMember = async (memberId: string) => {
     try {
-      await DatabaseService.deleteMember(memberId)
-      setMembers(members.filter((m) => m.id !== memberId))
-    } catch (error) {
+      const res = await fetch('/api/members', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: memberId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to delete member')
+      await loadMembers()
+      toast({ title: t("members.actions.deleteMemberSuccess"), description: `Member deleted successfully!` })
+    } catch (error: any) {
       console.error("Error deleting member:", error)
+      toast({ title: t("members.actions.deleteMemberError"), description: error.message || String(error), variant: "destructive" })
     }
   }
 
@@ -363,7 +529,7 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
             }
           }}
         />
-        <span>Select All</span>
+        <span>{t("common.selectAll")}</span>
       </div>
       {filteredMembers.map((member) => (
         <Card key={member.id} className="hover:shadow-lg transition-shadow duration-200">
@@ -397,7 +563,7 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
                 <span>{member.department || t("common.notAssigned")}</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Calendar className="h-3 w-3" />
+                <CalendarIcon className="h-3 w-3" />
                 <span>{formatDate(member.join_date)}</span>
               </div>
             </div>
@@ -442,11 +608,46 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
+            <div className="flex flex-wrap gap-1 mt-2">
+              {member.tags && member.tags.map((tag: string) => (
+                <Badge key={tag} variant="secondary">{tag}</Badge>
+              ))}
+            </div>
           </CardContent>
         </Card>
       ))}
     </div>
   )
+
+  const startEdit = (member: Member) => {
+    setEditingMemberId(member.id)
+    setEditFields({
+      first_name: member.first_name,
+      last_name: member.last_name,
+      department: member.department,
+      member_status: member.member_status,
+    })
+    setTimeout(() => editInputRef.current?.focus(), 100)
+  }
+  const cancelEdit = () => {
+    setEditingMemberId(null)
+    setEditFields({})
+    setEditError(null)
+  }
+  const saveEdit = async (member: Member) => {
+    setEditLoading(true)
+    setEditError(null)
+    try {
+      await DatabaseService.updateMember(member.id, editFields)
+      await loadMembers()
+      setEditingMemberId(null)
+      setEditFields({})
+    } catch (err) {
+      setEditError("Failed to save changes.")
+    } finally {
+      setEditLoading(false)
+    }
+  }
 
   const renderTableView = () => (
     <div className="max-h-[60vh] overflow-y-auto">
@@ -474,29 +675,33 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
                 }
               }}
             />
-            <span>Select All</span>
+            <span>{t("common.selectAll")}</span>
           </div>
           {filteredMembers.map((member) => (
             <TableRow key={member.id}>
               <TableCell>
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage
-                      src={member.profile_image || "/placeholder.svg"}
-                      alt={`${member.first_name} ${member.last_name}`}
+                {editingMemberId === member.id ? (
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      ref={editInputRef}
+                      value={editFields.first_name || ""}
+                      onChange={e => setEditFields(f => ({ ...f, first_name: e.target.value }))}
+                      onKeyDown={e => { if (e.key === 'Enter') saveEdit(member); if (e.key === 'Escape') cancelEdit(); }}
+                      className="w-24"
                     />
-                    <AvatarFallback>
-                      {member.first_name[0]}
-                      {member.last_name[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">
-                      {member.first_name} {member.last_name}
-                    </p>
-                    <p className="text-sm text-gray-500">{member.email}</p>
+                    <Input
+                      value={editFields.last_name || ""}
+                      onChange={e => setEditFields(f => ({ ...f, last_name: e.target.value }))}
+                      onKeyDown={e => { if (e.key === 'Enter') saveEdit(member); if (e.key === 'Escape') cancelEdit(); }}
+                      className="w-24"
+                    />
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span>{member.first_name} {member.last_name}</span>
+                    <Button variant="ghost" size="sm" onClick={() => startEdit(member)}>Edit</Button>
+                  </div>
+                )}
               </TableCell>
               <TableCell>
                 <div>
@@ -505,50 +710,81 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
                 </div>
               </TableCell>
               <TableCell>
-                <Badge variant="secondary">{member.department}</Badge>
+                {editingMemberId === member.id ? (
+                  <Select value={editFields.department || ""} onValueChange={v => setEditFields(f => ({ ...f, department: v }))}>
+                    <SelectTrigger className="w-32"><SelectValue placeholder="Department" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {/* Dynamically render department options here */}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Badge variant="secondary">{member.department}</Badge>
+                )}
               </TableCell>
               <TableCell>
-                <Badge className={getStatusColor(member.member_status)}>
-                  {member.member_status === "active" ? t("members.status.active") : t("members.status.inactive")}
-                </Badge>
+                {editingMemberId === member.id ? (
+                  <Select value={editFields.member_status || "active"} onValueChange={v => setEditFields(f => ({ ...f, member_status: v as any }))}>
+                    <SelectTrigger className="w-24"><SelectValue placeholder="Status" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Badge className={getStatusColor(member.member_status)}>
+                    {member.member_status === "active" ? t("members.status.active") : t("members.status.inactive")}
+                  </Badge>
+                )}
               </TableCell>
               <TableCell>{formatDate(member.join_date)}</TableCell>
-              <TableCell className="text-right">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setSelectedMember(member)
-                        setShowViewModal(true)
-                      }}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      {t("common.view")}
-                    </DropdownMenuItem>
-                    {userRole === "admin" && (
-                      <>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setSelectedMember(member)
-                            setShowEditModal(true)
-                          }}
-                        >
-                          <Edit className="h-4 w-4 mr-2" />
-                          {t("common.edit")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteMember(member.id)}>
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          {t("common.delete")}
-                        </DropdownMenuItem>
-                      </>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+              <TableCell>
+                <div className="flex flex-wrap gap-1">
+                  {member.tags && member.tags.map((tag: string) => (
+                    <Badge key={tag} variant="secondary">{tag}</Badge>
+                  ))}
+                </div>
+              </TableCell>
+              <TableCell>
+                {editingMemberId === member.id ? (
+                  <div className="flex gap-2 items-center">
+                    <Button size="sm" onClick={() => saveEdit(member)} disabled={editLoading}>Save</Button>
+                    <Button size="sm" variant="outline" onClick={cancelEdit}>Cancel</Button>
+                    {editError && <span className="text-red-600 text-xs ml-2">{editError}</span>}
+                  </div>
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setSelectedMember(member)
+                          setShowViewModal(true)
+                        }}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        {t("common.view")}
+                      </DropdownMenuItem>
+                      {userRole === "admin" && (
+                        <>
+                          <DropdownMenuItem onClick={() => startEdit(member)}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            {t("common.edit")}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteMember(member.id)}>
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            {t("common.delete")}
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </TableCell>
             </TableRow>
           ))}
@@ -571,7 +807,7 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
             }
           }}
         />
-        <span>Select All</span>
+        <span>{t("common.selectAll")}</span>
       </div>
       {filteredMembers.map((member) => (
         <Card
@@ -600,6 +836,11 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
             <Badge className={`${getStatusColor(member.member_status)} mt-2 text-xs`}>
               {member.member_status === "active" ? t("members.status.active") : t("members.status.inactive")}
             </Badge>
+            <div className="flex flex-wrap gap-1 mt-2">
+              {member.tags && member.tags.map((tag: string) => (
+                <Badge key={tag} variant="secondary">{tag}</Badge>
+              ))}
+            </div>
           </CardContent>
         </Card>
       ))}
@@ -620,7 +861,7 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
             }
           }}
         />
-        <span>Select All</span>
+        <span>{t("common.selectAll")}</span>
       </div>
       {filteredMembers.map((member) => (
         <Card key={member.id} className="hover:shadow-md transition-shadow duration-200">
@@ -695,6 +936,11 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
                 </DropdownMenu>
               </div>
             </div>
+            <div className="flex flex-wrap gap-1 mt-2">
+              {member.tags && member.tags.map((tag: string) => (
+                <Badge key={tag} variant="secondary">{tag}</Badge>
+              ))}
+            </div>
           </CardContent>
         </Card>
       ))}
@@ -715,7 +961,7 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
             }
           }}
         />
-        <span>Select All</span>
+        <span>{t("common.selectAll")}</span>
       </div>
       {filteredMembers.map((member) => (
         <Card key={member.id} className="hover:shadow-lg transition-shadow duration-200">
@@ -757,7 +1003,7 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
                 </div>
               )}
               <div className="flex items-center gap-3 text-sm">
-                <Calendar className="h-4 w-4 text-gray-400" />
+                <CalendarIcon className="h-4 w-4 text-gray-400" />
                 <span className="text-gray-600">
                   {t("members.joinedOn")} {formatDate(member.join_date)}
                 </span>
@@ -792,6 +1038,11 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
                   </Button>
                 )}
               </div>
+            </div>
+            <div className="flex flex-wrap gap-1 mt-2">
+              {member.tags && member.tags.map((tag: string) => (
+                <Badge key={tag} variant="secondary">{tag}</Badge>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -941,6 +1192,46 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
 
   return (
     <div className="p-6 space-y-6">
+      {/* Member Analytics Dashboard */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white rounded shadow p-4 flex flex-col gap-2">
+          <div className="text-2xl font-bold">{stats.total}</div>
+          <div className="text-gray-600">Total de Membros</div>
+        </div>
+        <div className="bg-white rounded shadow p-4 flex flex-col gap-2">
+          <div className="flex gap-4">
+            <div>
+              <div className="text-xl font-bold text-green-600">{stats.active}</div>
+              <div className="text-xs text-gray-600">Ativos</div>
+            </div>
+            <div>
+              <div className="text-xl font-bold text-red-600">{stats.inactive}</div>
+              <div className="text-xs text-gray-600">Inativos</div>
+            </div>
+          </div>
+          <div className="mt-2 text-xs text-blue-700">Novos este mês: {stats.newThisMonth}</div>
+          <div className="text-xs text-orange-600">Aniversários este mês: {stats.birthdaysThisMonth}</div>
+        </div>
+        <div className="bg-white rounded shadow p-4 flex flex-col gap-2">
+          <div className="font-semibold mb-1">Tags mais comuns</div>
+          <div className="flex flex-wrap gap-1">
+            {stats.tagCounts.map(([tag, count]) => (
+              <Badge key={tag} variant="secondary">{tag} ({count})</Badge>
+            ))}
+            {stats.tagCounts.length === 0 && <span className="text-xs text-gray-400">Nenhuma tag</span>}
+          </div>
+          <div className="mt-2 font-semibold mb-1">Novos membros por mês</div>
+          <ResponsiveContainer width="100%" height={80}>
+            <BarChart data={stats.newPerMonth} margin={{ left: -20, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" fontSize={10} />
+              <YAxis fontSize={10} width={24} />
+              <RechartTooltip />
+              <Bar dataKey="count" fill="#6366f1" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -948,6 +1239,27 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
           <p className="text-gray-600">{t("members.description")}</p>
         </div>
         <div className="flex items-center gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" aria-label="Notificações" onClick={() => setUnreadCount(0)}>
+                <Bell className="h-6 w-6" />
+                {unreadCount > 0 && <span className="absolute top-1 right-1 bg-red-500 text-white rounded-full text-xs px-1">{unreadCount}</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 max-h-96 overflow-y-auto">
+              {notifications.length === 0 ? (
+                <div className="p-4 text-center text-muted-foreground">Sem notificações</div>
+              ) : notifications.slice(-10).reverse().map((notif, i) => (
+                <div key={i} className={`p-3 border-b last:border-b-0 ${notif.read ? '' : 'bg-blue-50'}`}> 
+                  <div className="flex flex-col">
+                    <span className="font-medium">{notif.type === 'birthday' ? 'Aniversário' : notif.type === 'new' ? 'Novo Membro' : 'Notificação'}</span>
+                    <span className="text-xs text-muted-foreground">{notif.message}</span>
+                    <span className="text-xs text-gray-400 mt-1">{new Date(notif.date).toLocaleString()}</span>
+                  </div>
+                </div>
+              ))}
+            </PopoverContent>
+          </Popover>
           <input
             type="file"
             accept=".csv,.xlsx,.xls"
@@ -961,21 +1273,20 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
           </Button>
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="h-4 w-4 mr-2" />
-            {t("members.actions.export")} CSV
+            {t("members.actions.export") + " CSV"}
           </Button>
           <Button variant="outline" size="sm" onClick={handleExportExcel}>
             <Download className="h-4 w-4 mr-2" />
-            {t("members.actions.export")} Excel
+            {t("members.actions.export") + " Excel"}
           </Button>
           <Button
             onClick={() => {
-              toast({ title: "Button clicked" });
-              console.log("Add Member button clicked");
+              toast({ title: t("members.actions.addMember") });
               setShowAddModal(true);
             }}
             className="mb-4"
           >
-            Add Member
+            {t("members.actions.addMember")}
           </Button>
         </div>
       </div>
@@ -1019,17 +1330,6 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">{t("members.stats.departments")}</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.departments}</p>
-              </div>
-              <Building2 className="h-8 w-8 text-purple-600" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
                 <p className="text-sm font-medium text-gray-600">{t("members.stats.newThisMonth")}</p>
                 <p className="text-2xl font-bold text-blue-600">{stats.newThisMonth}</p>
               </div>
@@ -1051,7 +1351,62 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
       </div>
 
       {/* Filters */}
-      <MemberFilters onFiltersChange={setFilters} />
+      <div className={`sticky top-0 z-30 bg-white border-b py-2 px-4 flex flex-wrap gap-2 items-center ${showFilterBar ? 'shadow' : ''}`}>
+        <Button variant="outline" size="sm" onClick={() => setShowFilterBar(f => !f)}>
+          <Filter className="h-4 w-4 mr-2" /> {t("common.filters")}
+        </Button>
+        <Select value={filters.department || ""} onValueChange={v => setFilters((f: any) => ({ ...f, department: v }))}>
+          <SelectTrigger className="w-32"><SelectValue placeholder="Department" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Departments</SelectItem>
+            {/* Dynamically render department options here */}
+          </SelectContent>
+        </Select>
+        <Select value={filters.status || ""} onValueChange={v => setFilters((f: any) => ({ ...f, status: v }))}>
+          <SelectTrigger className="w-32"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+          </SelectContent>
+        </Select>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm">Join Date</Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="range"
+              selected={joinDateRange}
+              onSelect={range => {
+                setJoinDateRange(range as any)
+                setFilters((f: any) => ({ ...f, joinDateFrom: range?.from || undefined, joinDateTo: range?.to || undefined }))
+              }}
+              numberOfMonths={2}
+            />
+          </PopoverContent>
+        </Popover>
+        <Select value={birthdayMonth} onValueChange={v => { setBirthdayMonth(v); setFilters((f: any) => ({ ...f, birthdayMonth: v })) }}>
+          <SelectTrigger className="w-32"><SelectValue placeholder="Birthday Month" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Months</SelectItem>
+            {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((m, i) => (
+              <SelectItem key={m} value={String(i+1).padStart(2,'0')}>{m}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {/* Active filter chips */}
+        {Object.entries(filters).filter(([k,v]) => v && v !== "all" && v !== "").map(([k,v]) => (
+          <span key={k} className="bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-xs flex items-center gap-1">
+            {k}: {String(v)}
+            <button onClick={() => setFilters((f: any) => ({ ...f, [k]: "" }))}><X className="h-3 w-3" /></button>
+          </span>
+        ))}
+        {Object.values(filters).some(v => v && v !== "all" && v !== "") && (
+          <Button variant="ghost" size="sm" onClick={() => { setFilters({}); setJoinDateRange({ from: undefined, to: undefined }); setBirthdayMonth("") }}>Clear All</Button>
+        )}
+      </div>
 
       {/* Search and Controls */}
       <Card>
@@ -1062,7 +1417,10 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
               <Input
                 placeholder={t("members.search.placeholder")}
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setFilters((f: any) => ({ ...f, search: e.target.value }));
+                }}
                 className="pl-10"
               />
             </div>
@@ -1127,7 +1485,9 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
       {selectedMember && (
         <>
           <EditMemberModal memberId={String(selectedMember.id)} />
-          <ViewMemberModal memberId={String(selectedMember.id)} />
+          {selectedMember && showViewModal && (
+            <ViewMemberModal memberId={selectedMember.id} />
+          )}
         </>
       )}
 
@@ -1171,6 +1531,161 @@ export default function MemberManagement({ language = "pt" }: MemberManagementPr
         onOpenChange={setShowDeptModal}
         onSelect={handleBulkAssignDepartment}
       />
+
+      {/* Sticky Bulk Actions Bar */}
+      {selectedMembers.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t shadow-lg flex flex-wrap gap-2 p-4 items-center justify-between animate-slide-up text-base md:text-sm">
+          <span className="font-medium text-blue-700">{selectedMembers.length} selecionado(s)</span>
+          <div className="flex gap-2 flex-wrap items-center">
+            <select value={bulkTag} onChange={e => setBulkTag(e.target.value)} className="border rounded px-2 py-1">
+              <option value="">Tag...</option>
+              {allTags.map(tag => <option key={tag} value={tag}>{tag}</option>)}
+            </select>
+            <Button size="sm" onClick={async () => {
+              if (!bulkTag) return
+              await Promise.all(selectedMembers.map(id => MemberService.addTag(id, bulkTag)))
+              setBulkTag("")
+              loadMembers()
+            }}>Adicionar Tag</Button>
+            <Button size="sm" variant="destructive" onClick={async () => {
+              if (!bulkTag) return
+              await Promise.all(selectedMembers.map(id => MemberService.removeTag(id, bulkTag)))
+              setBulkTag("")
+              loadMembers()
+            }}>Remover Tag</Button>
+            <Button variant="destructive" size="sm" onClick={handleBulkDelete}>Delete</Button>
+            <Button variant="outline" size="sm" onClick={handleBulkActivate}>Set Active</Button>
+            <Button variant="outline" size="sm" onClick={handleBulkDeactivate}>Set Inactive</Button>
+            <Button variant="outline" size="sm" onClick={() => setShowDeptModal(true)}>Assign Department</Button>
+            <Button variant="outline" size="sm" onClick={handleExport}>Export CSV</Button>
+            <Button variant="outline" size="sm" onClick={handleExportExcel}>Export Excel</Button>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedMembers([])}>Clear</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Admin Button */}
+      {isAdmin && (
+        <button
+          className="fixed bottom-8 right-8 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg p-4 flex items-center gap-2"
+          onClick={() => setShowCustomFieldsModal(true)}
+          aria-label="Manage Custom Fields"
+        >
+          <span className="font-bold text-lg">+</span> Campos
+        </button>
+      )}
+      {/* Custom Fields Admin Modal */}
+      <Dialog open={showCustomFieldsModal} onOpenChange={setShowCustomFieldsModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Gerenciar Campos Personalizados</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <form className="flex gap-2 items-end" onSubmit={async e => {
+              e.preventDefault()
+              if (!newField.name.trim()) return
+              setLoadingFields(true)
+              await fetch('/api/member-custom-fields', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'createField',
+                  name: newField.name,
+                  field_type: newField.field_type,
+                  options: newField.options ? newField.options.split(',').map((o: string) => o.trim()) : undefined
+                })
+              })
+              setNewField({ name: '', field_type: 'text', options: '' })
+              MemberService.getCustomFields().then((r: any) => {
+                setCustomFields(r.customFields || [])
+                setLoadingFields(false)
+              })
+            }}>
+              <Input value={newField.name} onChange={e => setNewField(f => ({ ...f, name: e.target.value }))} placeholder="Nome do campo" className="flex-1" />
+              <select value={newField.field_type} onChange={e => setNewField(f => ({ ...f, field_type: e.target.value }))} className="border rounded px-2 py-1">
+                <option value="text">Texto</option>
+                <option value="number">Número</option>
+                <option value="select">Seleção</option>
+                <option value="date">Data</option>
+              </select>
+              {newField.field_type === 'select' && (
+                <Input value={newField.options} onChange={e => setNewField(f => ({ ...f, options: e.target.value }))} placeholder="Opções (separadas por vírgula)" className="w-48" />
+              )}
+              <Button type="submit" disabled={loadingFields}>Adicionar</Button>
+            </form>
+            <ul className="divide-y">
+              {customFields.map((field: any) => (
+                <li key={field.id} className="flex items-center gap-2 py-2">
+                  <span className="flex-1 font-medium">{field.name}</span>
+                  <span className="text-xs text-gray-500">{field.field_type}</span>
+                  {field.field_type === 'select' && field.options && (
+                    <span className="text-xs text-gray-400">[{(Array.isArray(field.options) ? field.options : []).join(', ')}]</span>
+                  )}
+                  <Button size="sm" variant="destructive" onClick={async () => {
+                    setLoadingFields(true)
+                    await fetch('/api/member-custom-fields', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'deleteField', fieldId: field.id })
+                    })
+                    MemberService.getCustomFields().then((r: any) => {
+                      setCustomFields(r.customFields || [])
+                      setLoadingFields(false)
+                    })
+                  }}>Excluir</Button>
+                </li>
+              ))}
+              {customFields.length === 0 && <li className="text-sm text-gray-500">Nenhum campo personalizado.</li>}
+            </ul>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCustomFieldsModal(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {isAdmin && (
+        <Button className="fixed bottom-24 right-8 z-50 bg-yellow-500 hover:bg-yellow-600 text-white rounded-full shadow-lg p-4" onClick={() => { setDuplicates(findDuplicates(members)); setShowDuplicatesModal(true) }}>Detectar Duplicados</Button>
+      )}
+      {/* Duplicates Modal */}
+      <Dialog open={showDuplicatesModal} onOpenChange={setShowDuplicatesModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Possíveis Duplicados</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {duplicates.length === 0 && <div className="text-gray-500">Nenhum duplicado encontrado.</div>}
+            {duplicates.map((group, i) => (
+              <div key={i} className="border rounded p-2">
+                <div className="font-semibold mb-1">Grupo {i + 1}</div>
+                <ul className="mb-2">
+                  {group.map((m: Member) => (
+                    <li key={m.id} className="flex gap-2 items-center">
+                      <span>{m.first_name} {m.last_name}</span>
+                      <span className="text-xs text-gray-500">{m.email}</span>
+                      <span className="text-xs text-gray-500">{m.phone}</span>
+                      <Button size="sm" variant="outline" onClick={() => setSelectedMember(m)}>Ver</Button>
+                    </li>
+                  ))}
+                </ul>
+                <Button size="sm" variant="default" onClick={async () => {
+                  // Merge logic: keep the first, merge data from others, delete others
+                  const [primary, ...others] = group
+                  // Merge attachments, notes, custom fields, tags (could be improved)
+                  // For now, just delete others
+                  for (const other of others) {
+                    await DatabaseService.deleteMember(other.id)
+                  }
+                  loadMembers()
+                  setDuplicates(findDuplicates(members))
+                }}>Mesclar e Remover Duplicados</Button>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDuplicatesModal(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -3,6 +3,7 @@
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
 import { AuthService, type UserProfile } from "@/lib/auth-service"
+import { supabase } from "@/lib/supabase-client"
 import type { Language } from "@/lib/i18n"
 
 interface AuthContextType {
@@ -33,9 +34,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadUser = async () => {
     try {
       setLoading(true)
-      const { user: currentUser, profile } = await AuthService.getCurrentUser()
-      setUser(currentUser)
-      setUserProfile(profile)
+      // Use supabase.auth.getUser() to get the user from localStorage/session
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      let profile = null;
+      if (currentUser) {
+        // Optionally, fetch the user profile from your API or DB here
+        const { data, error } = await supabase
+          .from("user_profiles")
+          .select("*")
+          .eq("user_id", currentUser.id)
+          .single();
+        if (!error) profile = data;
+      }
+      setUser(currentUser);
+      setUserProfile(profile);
     } catch (error) {
       console.error("Error loading user:", error)
     } finally {

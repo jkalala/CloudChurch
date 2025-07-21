@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -44,6 +44,7 @@ import { useAuth } from "@/components/auth-provider"
 import { useTranslation } from "@/lib/i18n"
 import { toast } from "@/hooks/use-toast"
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { createClientComponentClient } from "@/lib/supabase-client"
 
 interface StreamSession {
   id: string
@@ -71,6 +72,8 @@ interface ChatMessage {
   timestamp: Date
   type: "message" | "donation" | "prayer" | "system"
   amount?: number
+  pinned?: boolean
+  parent_id?: string | null
 }
 
 interface StreamAnalytics {
@@ -112,39 +115,89 @@ export default function LiveStreamingPlatform() {
     prayerRequestsEnabled: true,
   })
 
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: "1",
-      user: "Maria Silva",
-      message: "Blessings to everyone! 🙏",
-      timestamp: new Date(),
-      type: "message",
-    },
-    {
-      id: "2",
-      user: "João Santos",
-      message: "Thank you for this wonderful service",
-      timestamp: new Date(),
-      type: "message",
-    },
-    {
-      id: "3",
-      user: "Ana Costa",
-      message: "Donated $25",
-      timestamp: new Date(),
-      type: "donation",
-      amount: 25,
-    },
-    {
-      id: "4",
-      user: "Pedro Lima",
-      message: "Please pray for my family's health",
-      timestamp: new Date(),
-      type: "prayer",
-    },
-  ])
-
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [newMessage, setNewMessage] = useState("")
+  const [pinnedMessages, setPinnedMessages] = useState<ChatMessage[]>([])
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
+  const streamId = streamSession.id
+
+  const [onlineUsers, setOnlineUsers] = useState<{ id: string; name: string }[]>([])
+  const [typingUsers, setTypingUsers] = useState<{ id: string; name: string }[]>([])
+  const typingTimeouts = useRef<{ [id: string]: NodeJS.Timeout }>({})
+  const [reactions, setReactions] = useState<Record<string, Record<string, string[]>>>({}) // messageId -> emoji -> userIds
+
+  // Fetch chat messages on load
+  useEffect(() => {
+    async function fetchMessages() {
+      const res = await fetch(`/api/streaming/chat?streamId=${streamId}`)
+      const data = await res.json()
+      setChatMessages(data.messages || [])
+    }
+    fetchMessages()
+
+    // Supabase Realtime subscription
+    const supabase = createClientComponentClient()
+    const channel = supabase.channel('chat-messages')
+    channel.on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'chat_messages',
+        filter: `stream_id=eq.${streamId}`,
+      },
+      (payload) => {
+        setChatMessages((prev) => [...prev, payload.new as ChatMessage])
+      }
+    )
+    channel.subscribe()
+
+    // Presence channel for online users and typing
+    const presenceChannel = supabase.channel('chat-presence')
+    presenceChannel.on('system', { event: 'sync' }, (state: any) => {
+      setOnlineUsers(state.presences.map((p: any) => ({ id: p.user_id, name: p.user_name })))
+    })
+    presenceChannel.on('broadcast', { event: 'typing' }, (payload) => {
+      const { user_id, user_name } = payload
+      setTypingUsers((prev) => {
+        if (prev.some(u => u.id === user_id)) return prev
+        return [...prev, { id: user_id, name: user_name }]
+      })
+      if (typingTimeouts.current[user_id]) clearTimeout(typingTimeouts.current[user_id])
+      typingTimeouts.current[user_id] = setTimeout(() => {
+        setTypingUsers((prev) => prev.filter(u => u.id !== user_id))
+      }, 2000)
+    })
+    presenceChannel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await presenceChannel.track({ user_id: user?.id, user_name: user?.email })
+      }
+    })
+    return () => {
+      channel.unsubscribe()
+      presenceChannel.unsubscribe()
+    }
+  }, [streamId, user?.id, user?.email])
+
+  // Fetch pinned messages on load
+  useEffect(() => {
+    async function fetchPinned() {
+      const res = await fetch(`/api/streaming/chat?streamId=${streamId}&pinned=1`)
+      const data = await res.json()
+      setPinnedMessages(data.messages || [])
+    }
+    fetchPinned()
+  }, [streamId])
+
+  useEffect(() => {
+    async function fetchReactions() {
+      const res = await fetch(`/api/streaming/chat?streamId=${streamId}&reactions=1`)
+      const data = await res.json()
+      setReactions(data.reactions || {})
+    }
+    fetchReactions()
+  }, [streamId, chatMessages.length])
+
   const [streamAnalytics] = useState<StreamAnalytics>({
     totalViews: 1247,
     averageWatchTime: "23:45",
@@ -196,18 +249,34 @@ export default function LiveStreamingPlatform() {
     })
   }
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (newMessage.trim()) {
-      const message: ChatMessage = {
-        id: Date.now().toString(),
-        user: user?.email || "Anonymous",
+      const message = {
+        stream_id: streamId,
+        user_id: user?.id || "anonymous",
+        user_name: user?.email || "Anonymous",
         message: newMessage,
-        timestamp: new Date(),
         type: "message",
+        parent_id: replyTo?.id || null,
       }
-      setChatMessages((prev) => [...prev, message])
+      const res = await fetch("/api/streaming/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(message),
+      })
+      const saved = await res.json()
+      setChatMessages((prev) => [...prev, saved])
       setNewMessage("")
+      setReplyTo(null)
     }
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value)
+    // Broadcast typing event
+    const supabase = createClientComponentClient()
+    const presenceChannel = supabase.channel('chat-presence')
+    presenceChannel.send({ type: 'broadcast', event: 'typing', payload: { user_id: user?.id, user_name: user?.email } })
   }
 
   const getStatusColor = (status: string) => {
@@ -249,6 +318,8 @@ export default function LiveStreamingPlatform() {
       return () => clearInterval(interval)
     }
   }, [isStreaming])
+
+  const isAdmin = user?.role === 'admin'
 
   return (
     <div className="space-y-6">
@@ -534,8 +605,38 @@ export default function LiveStreamingPlatform() {
                 </CardHeader>
                 <CardContent className="p-0 flex flex-col h-96">
                   <ScrollArea className="flex-1 px-4">
+                    {/* Online users */}
+                    {onlineUsers.length > 0 && (
+                      <div className="flex gap-2 items-center mb-2 text-xs text-muted-foreground">
+                        <span>Online:</span>
+                        {onlineUsers.map(u => <span key={u.id} className="font-medium">{u.name}</span>)}
+                      </div>
+                    )}
+                    {/* Typing indicator */}
+                    {typingUsers.length > 0 && (
+                      <div className="text-xs text-blue-500 mb-2">
+                        {typingUsers.map(u => u.name).join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing...
+                      </div>
+                    )}
+                    {pinnedMessages.length > 0 && (
+                      <div className="mb-2 p-2 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                        <div className="font-semibold text-yellow-800 mb-1">Pinned Messages</div>
+                        {pinnedMessages.map(msg => (
+                          <div key={msg.id} className="text-sm text-yellow-900 flex items-center gap-2">
+                            <span>{msg.user}: {msg.message}</span>
+                            <span className="text-xs text-yellow-600">(Pinned)</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {replyTo && (
+                      <div className="mb-2 p-2 bg-blue-50 border-l-4 border-blue-400 rounded flex items-center justify-between">
+                        <span className="text-xs text-blue-800">Replying to: {replyTo.user}: {replyTo.message}</span>
+                        <Button size="sm" variant="ghost" onClick={() => setReplyTo(null)}>Cancel</Button>
+                      </div>
+                    )}
                     <div className="space-y-3">
-                      {chatMessages.map((message) => (
+                      {chatMessages.filter((m: ChatMessage) => !m.parent_id).map((message: ChatMessage) => (
                         <div key={message.id} className="flex gap-2">
                           <Avatar className="h-6 w-6">
                             <AvatarFallback className="text-xs">{message.user.charAt(0)}</AvatarFallback>
@@ -550,7 +651,109 @@ export default function LiveStreamingPlatform() {
                               {message.message}
                               {message.amount && <span className="text-green-600 font-medium"> ${message.amount}</span>}
                             </p>
+                            <div className="flex gap-1 mt-1">
+                              {["👍", "❤️", "🙏", "😂", "🎵"].map(emoji => {
+                                const users = reactions[message.id]?.[emoji] || []
+                                const reacted = users.includes(user?.id)
+                                return (
+                                  <button
+                                    key={emoji}
+                                    className={`text-lg px-1 rounded ${reacted ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                                    onClick={async () => {
+                                      await fetch(`/api/streaming/chat?messageId=${message.id}&emoji=${encodeURIComponent(emoji)}`, { method: 'POST' })
+                                      // Refresh reactions
+                                      const res = await fetch(`/api/streaming/chat?streamId=${streamId}&reactions=1`)
+                                      const data = await res.json()
+                                      setReactions(data.reactions || {})
+                                    }}
+                                  >
+                                    {emoji} <span className="text-xs">{users.length > 0 ? users.length : ""}</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                            <Button size="sm" variant="outline" onClick={() => setReplyTo(message)}>Reply</Button>
+                            {isAdmin && (
+                              <Button size="sm" variant={message.pinned ? "secondary" : "outline"} onClick={async () => {
+                                await fetch(`/api/streaming/chat?messageId=${message.id}&pin=${message.pinned ? 0 : 1}`, { method: 'PATCH' })
+                                // Refresh pinned messages
+                                const res = await fetch(`/api/streaming/chat?streamId=${streamId}&pinned=1`)
+                                const data = await res.json()
+                                setPinnedMessages(data.messages || [])
+                              }}>
+                                {message.pinned ? "Unpin" : "Pin"}
+                              </Button>
+                            )}
+                            {isAdmin && (
+                              <Button size="sm" variant="destructive" onClick={async () => {
+                                await fetch(`/api/streaming/chat?messageId=${message.id}`, { method: 'DELETE' })
+                                setChatMessages((prev) => prev.filter((m) => m.id !== message.id))
+                                console.log(`Audit: Admin ${user?.email} deleted message ${message.id}`)
+                              }}>
+                                Delete
+                              </Button>
+                            )}
                           </div>
+                          {/* Render replies indented */}
+                          {chatMessages.filter((r: ChatMessage) => r.parent_id === message.id).map((reply: ChatMessage) => (
+                            <div key={reply.id} className="flex gap-2 ml-8 border-l-2 border-blue-100 pl-2 mt-1">
+                              <Avatar className="h-6 w-6">
+                                <AvatarFallback className="text-xs">{reply.user.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium truncate">{reply.user}</span>
+                                  {reply.type === "donation" && <DollarSign className="h-3 w-3 text-green-600" />}
+                                  {reply.type === "prayer" && <Heart className="h-3 w-3 text-red-600" />}
+                                </div>
+                                <p className="text-sm text-gray-700 break-words">
+                                  {reply.message}
+                                  {reply.amount && <span className="text-green-600 font-medium"> ${reply.amount}</span>}
+                                </p>
+                                <div className="flex gap-1 mt-1">
+                                  {["👍", "❤️", "🙏", "😂", "🎵"].map(emoji => {
+                                    const users = reactions[reply.id]?.[emoji] || []
+                                    const reacted = users.includes(user?.id)
+                                    return (
+                                      <button
+                                        key={emoji}
+                                        className={`text-lg px-1 rounded ${reacted ? "bg-blue-100" : "hover:bg-gray-100"}`}
+                                        onClick={async () => {
+                                          await fetch(`/api/streaming/chat?messageId=${reply.id}&emoji=${encodeURIComponent(emoji)}`, { method: 'POST' })
+                                          // Refresh reactions
+                                          const res = await fetch(`/api/streaming/chat?streamId=${streamId}&reactions=1`)
+                                          const data = await res.json()
+                                          setReactions(data.reactions || {})
+                                        }}
+                                      >
+                                        {emoji} <span className="text-xs">{users.length > 0 ? users.length : ""}</span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                              {isAdmin && (
+                                <Button size="sm" variant={reply.pinned ? "secondary" : "outline"} onClick={async () => {
+                                  await fetch(`/api/streaming/chat?messageId=${reply.id}&pin=${reply.pinned ? 0 : 1}`, { method: 'PATCH' })
+                                  // Refresh pinned messages
+                                  const res = await fetch(`/api/streaming/chat?streamId=${streamId}&pinned=1`)
+                                  const data = await res.json()
+                                  setPinnedMessages(data.messages || [])
+                                }}>
+                                  {reply.pinned ? "Unpin" : "Pin"}
+                                </Button>
+                              )}
+                              {isAdmin && (
+                                <Button size="sm" variant="destructive" onClick={async () => {
+                                  await fetch(`/api/streaming/chat?messageId=${reply.id}`, { method: 'DELETE' })
+                                  setChatMessages((prev) => prev.filter((m) => m.id !== reply.id))
+                                  console.log(`Audit: Admin ${user?.email} deleted message ${reply.id}`)
+                                }}>
+                                  Delete
+                                </Button>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
@@ -563,7 +766,7 @@ export default function LiveStreamingPlatform() {
                       <Input
                         placeholder={t("typeMessage")}
                         value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
+                        onChange={handleInputChange}
                         onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
                         className="flex-1"
                       />

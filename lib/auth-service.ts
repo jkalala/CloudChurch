@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-client"
 
 export interface UserPermissions {
   manage_users: boolean
@@ -28,48 +28,8 @@ export interface UserProfile {
   updated_at: string
 }
 
-// Mock user database for authentication
-const MOCK_USERS = [
-  {
-    id: "admin-user-123",
-    email: "joaquim.kalala@gmail.com",
-    password: "Angola@2025", // In real app, this would be hashed
-    profile: {
-      id: "profile-admin-123",
-      user_id: "admin-user-123",
-      email: "joaquim.kalala@gmail.com",
-      first_name: "Joaquim",
-      last_name: "Kalala",
-      role: "admin" as const,
-      church_name: "Igreja Semente Bendita",
-      phone: "+244 923 456 789",
-      profile_image: "/placeholder-user.jpg",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  },
-  {
-    id: "member-user-456",
-    email: "member@church.com",
-    password: "password123",
-    profile: {
-      id: "profile-member-456",
-      user_id: "member-user-456",
-      email: "member@church.com",
-      first_name: "John",
-      last_name: "Doe",
-      role: "member" as const,
-      church_name: "Igreja Semente Bendita",
-      phone: "+244 912 345 678",
-      profile_image: "/placeholder-user.jpg",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  },
-]
-
 export class AuthService {
-  private static supabase = createClient()
+  private static supabase = supabase
   private static currentSession: { user: any; profile: UserProfile } | null = null
 
   static async signIn(
@@ -77,52 +37,31 @@ export class AuthService {
     password: string,
   ): Promise<{ success: boolean; user?: any; profile?: UserProfile; error?: string }> {
     try {
-      // Find user in mock database
-      const mockUser = MOCK_USERS.find((u) => u.email.toLowerCase() === email.toLowerCase())
-
-      if (!mockUser) {
-        return { success: false, error: "User not found" }
+      // Use the new API route to sign in and set the cookie
+      const res = await fetch("/api/auth/signin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        return { success: false, error: result.error || "Authentication failed" };
       }
-
-      // Validate password
-      if (mockUser.password !== password) {
-        return { success: false, error: "Invalid password" }
+      // Set the session in the Supabase client for localStorage sync
+      if (result.session && result.session.access_token && result.session.refresh_token) {
+        await supabase.auth.setSession({
+          access_token: result.session.access_token,
+          refresh_token: result.session.refresh_token,
+        });
       }
-
-      // Get user permissions
-      const permissions = await this.getUserPermissions(mockUser.id)
-
-      const userProfile = {
-        ...mockUser.profile,
-        permissions,
-      }
-
-      // Store session
-      this.currentSession = {
-        user: {
-          id: mockUser.id,
-          email: mockUser.email,
-          created_at: new Date().toISOString(),
-          last_sign_in_at: new Date().toISOString(),
-          role: "authenticated",
-          app_metadata: { provider: "email" },
-        },
-        profile: userProfile,
-      }
-
-      // Store in localStorage for persistence
+      // After successful login, reload the page to sync session
       if (typeof window !== "undefined") {
-        localStorage.setItem("auth_session", JSON.stringify(this.currentSession))
+        window.location.reload();
       }
-
-      return {
-        success: true,
-        user: this.currentSession.user,
-        profile: this.currentSession.profile,
-      }
-    } catch (error) {
-      console.error("Sign in error:", error)
-      return { success: false, error: "Authentication failed" }
+      return { success: true };
+    } catch (error: any) {
+      console.error("Sign in error:", error);
+      return { success: false, error: error.message || "Authentication failed" };
     }
   }
 
@@ -196,27 +135,21 @@ export class AuthService {
 
   static async getUserPermissions(userId: string): Promise<UserPermissions> {
     try {
-      // For admin user, return all permissions
-      if (userId === "admin-user-123") {
-        return {
-          manage_users: true,
-          manage_finances: true,
-          manage_events: true,
-          manage_members: true,
-          manage_settings: true,
-          view_analytics: true,
-          manage_departments: true,
-          manage_streaming: true,
-          manage_pastoral_care: true,
-          super_admin: true,
-        }
-      }
-
-      // For other users, return limited permissions
-      return this.getDefaultPermissions()
+      // Fetch permissions from admin_permissions table
+      const { data: permissionsRows } = await this.supabase
+        .from("admin_permissions")
+        .select("permission_type")
+        .eq("user_id", userId);
+      const permissions = permissionsRows
+        ? permissionsRows.reduce((acc: any, row: any) => {
+            acc[row.permission_type] = true;
+            return acc;
+          }, {})
+        : {};
+      return permissions as UserPermissions;
     } catch (error) {
-      console.error("Error getting user permissions:", error)
-      return this.getDefaultPermissions()
+      console.error("Error getting user permissions:", error);
+      return {} as UserPermissions;
     }
   }
 

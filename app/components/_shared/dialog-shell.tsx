@@ -30,7 +30,7 @@ export function DialogShell({
 }: DialogShellProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={cn(sizeClasses[size], className)}>
+      <DialogContent className={cn("w-full max-w-[90vw] sm:max-w-xl overflow-y-auto max-h-[90vh]", sizeClasses[size], className)}>
         {title && (
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>

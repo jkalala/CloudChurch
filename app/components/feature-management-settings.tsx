@@ -66,6 +66,7 @@ import {
 import { FeatureManager, type Feature, type FeatureCategory } from "@/lib/feature-management"
 import { useAuth } from "@/components/auth-provider"
 import { toast } from "@/hooks/use-toast"
+import { useFeatureFlags } from "./_shared/feature-context";
 
 const ICON_MAP = {
   Home,
@@ -94,6 +95,7 @@ export default function FeatureManagementSettings() {
   const [features, setFeatures] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
+  const { refreshFeatures } = useFeatureFlags();
 
   useEffect(() => {
     fetchFeatures()
@@ -133,6 +135,7 @@ export default function FeatureManagementSettings() {
       if (!res.ok) {
         toast({ title: "Error", description: data.error || "Failed to update feature.", variant: "destructive" })
       }
+      await refreshFeatures();
     } catch (err) {
       toast({ title: "Error", description: "Network or server error.", variant: "destructive" })
     }
@@ -142,12 +145,25 @@ export default function FeatureManagementSettings() {
 
   async function handleUpdate(name: string, description: string, roles: string) {
     setSaving(name)
-    await fetch("/api/features", {
-      credentials: "include",
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, description, roles: roles.split(",").map(r => r.trim()) }),
-    })
+    try {
+      const res = await fetch("/api/features", {
+        credentials: "include",
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          description,
+          roles: roles.split(",").map((r: string) => r.trim()),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast({ title: "Error", description: data.error || "Failed to update feature.", variant: "destructive" })
+      }
+      await refreshFeatures();
+    } catch (err) {
+      toast({ title: "Error", description: "Network or server error.", variant: "destructive" })
+    }
     fetchFeatures()
     setSaving(null)
   }

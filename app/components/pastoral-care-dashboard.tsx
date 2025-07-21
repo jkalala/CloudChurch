@@ -34,8 +34,12 @@ import {
   type CareMetrics,
 } from "@/lib/pastoral-care-service"
 import { useToast } from "@/hooks/use-toast"
+import { useTranslation } from "@/lib/i18n";
+import { useAuth } from "@/components/auth-provider";
 
 export default function PastoralCareDashboard() {
+  const { language } = useAuth();
+  const { t } = useTranslation(language);
   const [careRecords, setCareRecords] = useState<CareRecord[]>([])
   const [prayerRequests, setPrayerRequests] = useState<PrayerRequest[]>([])
   const [crisisAlerts, setCrisisAlerts] = useState<CrisisAlert[]>([])
@@ -130,18 +134,18 @@ export default function PastoralCareDashboard() {
             <Heart className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Pastoral Care</h1>
-            <p className="text-gray-600">Comprehensive care management and member support</p>
+            <h1 className="text-3xl font-bold text-gray-900">{t("pastoralCare.title")}</h1>
+            <p className="text-gray-600">{t("pastoralCare.description")}</p>
           </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline">
             <Filter className="h-4 w-4 mr-2" />
-            Filter
+            {t("common.filters")}
           </Button>
           <Button>
             <Plus className="h-4 w-4 mr-2" />
-            New Care Record
+            {t("pastoralCare.newCareRecord")}
           </Button>
         </div>
       </div>
@@ -151,34 +155,34 @@ export default function PastoralCareDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Cases</CardTitle>
+              <CardTitle className="text-sm font-medium">{t("pastoralCare.activeCases")}</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{metrics.total_active_cases}</div>
-              <p className="text-xs text-muted-foreground">{metrics.urgent_cases} urgent cases</p>
+              <p className="text-xs text-muted-foreground">{metrics.urgent_cases} {t("pastoralCare.urgentCases")}</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Prayer Requests</CardTitle>
+              <CardTitle className="text-sm font-medium">{t("pastoralCare.prayerRequests")}</CardTitle>
               <MessageSquare className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{metrics.prayer_requests_active}</div>
-              <p className="text-xs text-muted-foreground">Active requests</p>
+              <p className="text-xs text-muted-foreground">{t("pastoralCare.activeRequests")}</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Crisis Alerts</CardTitle>
+              <CardTitle className="text-sm font-medium">{t("pastoralCare.crisisAlerts")}</CardTitle>
               <AlertTriangle className="h-4 w-4 text-red-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600">{metrics.crisis_alerts_active}</div>
-              <p className="text-xs text-muted-foreground">Require immediate attention</p>
+              <p className="text-xs text-muted-foreground">{t("pastoralCare.requireAttention")}</p>
             </CardContent>
           </Card>
 

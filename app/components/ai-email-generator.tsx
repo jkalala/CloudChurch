@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -14,6 +14,50 @@ import { useTranslation } from "@/lib/i18n"
 import { useAuth } from "@/components/auth-provider"
 import { toast } from "@/hooks/use-toast"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+
+// Custom hook for email generation logic
+interface UseEmailGenerationParams {
+  selectedTemplate: string;
+  selectedMembers: string[];
+  customContext: Record<string, string>;
+  setGeneratedEmails: React.Dispatch<React.SetStateAction<GeneratedEmail[]>>;
+  setIsGenerating: React.Dispatch<React.SetStateAction<boolean>>;
+}
+export function useEmailGeneration({ selectedTemplate, selectedMembers, customContext, setGeneratedEmails, setIsGenerating }: UseEmailGenerationParams) {
+  const handleGenerateEmails = useCallback(async () => {
+    if (!selectedTemplate || selectedMembers.length === 0) {
+      toast({
+        title: "Missing Information",
+        description: "Please select a template and at least one member.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsGenerating(true);
+    try {
+      const emails = await AIEmailService.generateBulkEmails(
+        selectedMembers,
+        selectedTemplate as EmailTemplate["type"],
+        customContext,
+      );
+      setGeneratedEmails(emails);
+      toast({
+        title: "Emails Generated Successfully",
+        description: `Generated ${emails.length} personalized emails.`,
+      });
+    } catch (error) {
+      console.error("Error generating emails:", error);
+      toast({
+        title: "Generation Failed",
+        description: "Failed to generate emails. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [selectedTemplate, selectedMembers, customContext, setGeneratedEmails, setIsGenerating]);
+  return { handleGenerateEmails };
+}
 
 export default function AIEmailGenerator() {
   const [selectedTemplate, setSelectedTemplate] = useState<string>("")
@@ -36,39 +80,7 @@ export default function AIEmailGenerator() {
     { value: "newsletter", label: "Newsletter", icon: Send, color: "text-cyan-500" },
   ]
 
-  const handleGenerateEmails = async () => {
-    if (!selectedTemplate || selectedMembers.length === 0) {
-      toast({
-        title: "Missing Information",
-        description: "Please select a template and at least one member.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsGenerating(true)
-    try {
-      const emails = await AIEmailService.generateBulkEmails(
-        selectedMembers,
-        selectedTemplate as EmailTemplate["type"],
-        customContext,
-      )
-      setGeneratedEmails(emails)
-      toast({
-        title: "Emails Generated Successfully",
-        description: `Generated ${emails.length} personalized emails.`,
-      })
-    } catch (error) {
-      console.error("Error generating emails:", error)
-      toast({
-        title: "Generation Failed",
-        description: "Failed to generate emails. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsGenerating(false)
-    }
-  }
+  const { handleGenerateEmails } = useEmailGeneration({ selectedTemplate, selectedMembers, customContext, setGeneratedEmails, setIsGenerating });
 
   const handleCopyEmail = (email: GeneratedEmail) => {
     navigator.clipboard.writeText(email.content)

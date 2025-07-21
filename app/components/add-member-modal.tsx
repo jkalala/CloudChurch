@@ -11,6 +11,8 @@ import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { UserPlus, Loader2 } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface Member {
   id?: number | string
@@ -51,14 +53,17 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
     emergency_contact: "",
     notes: "",
   })
+  const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    onSubmit({
+    setSubmitting(true)
+    await onSubmit({
       ...formData,
       date_of_birth: formData.date_of_birth?.toISOString(),
       baptism_date: formData.baptism_date?.toISOString(),
     })
+    setSubmitting(false)
     setFormData({
       first_name: "",
       last_name: "",
@@ -77,21 +82,35 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
   }
 
   return (
-    <DialogShell isOpen={open} onClose={() => onOpenChange(false)} title="Adicionar Novo Membro" size="xl" className="max-w-xl">
-      <form onSubmit={handleSubmit} className="space-y-6">
+    <DialogShell isOpen={open} onClose={() => onOpenChange(false)} title=" " size="xl" className="max-w-xl">
+      <div className="flex flex-col items-center gap-2 mb-4">
+        <UserPlus className="h-10 w-10 text-blue-600 animate-pop-in" />
+        <h2 className="text-2xl font-bold text-center">Adicionar Novo Membro</h2>
+        <p className="text-gray-500 text-center">Preencha os campos abaixo para cadastrar um novo membro.</p>
+      </div>
+      <AnimatePresence>
+        {submitting && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2 justify-center mb-4">
+            <Loader2 className="animate-spin h-5 w-5 text-blue-500" />
+            <span className="text-blue-600">Adicionando membro...</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <form onSubmit={handleSubmit} className="space-y-6 max-h-[80vh] overflow-y-auto animate-fade-in">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="first_name">Primeiro Nome *</label>
+            <label htmlFor="first_name" className="font-medium">Primeiro Nome *</label>
             <Input
               id="first_name"
               name="first_name"
               value={formData.first_name}
               onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
               required
+              autoFocus
             />
           </div>
           <div>
-            <label htmlFor="last_name">Último Nome *</label>
+            <label htmlFor="last_name" className="font-medium">Último Nome *</label>
             <Input
               id="last_name"
               name="last_name"
@@ -101,10 +120,9 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             />
           </div>
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email" className="font-medium">Email</label>
             <Input
               id="email"
               name="email"
@@ -114,7 +132,7 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             />
           </div>
           <div>
-            <label htmlFor="phone">Telefone</label>
+            <label htmlFor="phone" className="font-medium">Telefone</label>
             <Input
               id="phone"
               name="phone"
@@ -123,9 +141,8 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             />
           </div>
         </div>
-
         <div>
-          <label htmlFor="address">Endereço</label>
+          <label htmlFor="address" className="font-medium">Endereço</label>
           <Input
             id="address"
             name="address"
@@ -133,10 +150,9 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             onChange={(e) => setFormData({ ...formData, address: e.target.value })}
           />
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label>Data de Nascimento</label>
+            <label className="font-medium">Data de Nascimento</label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -161,7 +177,7 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             </Popover>
           </div>
           <div>
-            <label>Data de Batismo</label>
+            <label className="font-medium">Data de Batismo</label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -186,10 +202,9 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             </Popover>
           </div>
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="gender">Gênero</label>
+            <label htmlFor="gender" className="font-medium">Gênero</label>
             <Select value={formData.gender} onValueChange={(value) => setFormData({ ...formData, gender: value })}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecionar gênero" />
@@ -201,7 +216,7 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             </Select>
           </div>
           <div>
-            <label htmlFor="marital_status">Estado Civil</label>
+            <label htmlFor="marital_status" className="font-medium">Estado Civil</label>
             <Select
               value={formData.marital_status}
               onValueChange={(value) => setFormData({ ...formData, marital_status: value })}
@@ -218,10 +233,9 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             </Select>
           </div>
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="occupation">Profissão</label>
+            <label htmlFor="occupation" className="font-medium">Profissão</label>
             <Input
               id="occupation"
               name="occupation"
@@ -230,7 +244,7 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             />
           </div>
           <div>
-            <label htmlFor="department">Departamento</label>
+            <label htmlFor="department" className="font-medium">Departamento</label>
             <Select
               value={formData.department}
               onValueChange={(value) => setFormData({ ...formData, department: value })}
@@ -248,9 +262,8 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             </Select>
           </div>
         </div>
-
         <div>
-          <label htmlFor="emergency_contact">Contato de Emergência</label>
+          <label htmlFor="emergency_contact" className="font-medium">Contato de Emergência</label>
           <Input
             id="emergency_contact"
             name="emergency_contact"
@@ -258,9 +271,8 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             onChange={(e) => setFormData({ ...formData, emergency_contact: e.target.value })}
           />
         </div>
-
         <div>
-          <label htmlFor="notes">Observações</label>
+          <label htmlFor="notes" className="font-medium">Observações</label>
           <Textarea
             id="notes"
             name="notes"
@@ -269,12 +281,12 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             rows={3}
           />
         </div>
-
         <div className="flex flex-col md:flex-row gap-2 pt-2">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-full md:w-auto">
             Cancelar
           </Button>
-          <Button type="submit" className="w-full md:w-auto">
+          <Button type="submit" className="w-full md:w-auto" disabled={submitting}>
+            {submitting ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
             Adicionar Membro
           </Button>
         </div>

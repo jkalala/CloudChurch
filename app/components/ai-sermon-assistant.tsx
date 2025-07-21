@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,7 @@ import { toast } from "@/hooks/use-toast"
 import { DndContext, closestCenter } from "@dnd-kit/core"
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import type { Dispatch, SetStateAction } from "react";
 
 function SortablePoint({ id, index, point, onFindVerses, supportingVerses, isLoadingVerses }: {
   id: string;
@@ -65,6 +66,57 @@ function SortablePoint({ id, index, point, onFindVerses, supportingVerses, isLoa
   )
 }
 
+// Custom hook for sermon generation logic
+interface UseSermonGenerationParams {
+  sermonOutlines: SermonOutline[];
+  setSermonOutlines: Dispatch<SetStateAction<SermonOutline[]>>;
+  setSelectedOutline: Dispatch<SetStateAction<SermonOutline | null>>;
+  setIsGenerating: Dispatch<SetStateAction<boolean>>;
+  sermonConfig: {
+    theme: string;
+    targetAudience: "general" | "youth" | "children" | "seniors";
+    language: "pt" | "en" | "fr";
+    duration: number;
+  };
+}
+export function useSermonGeneration({ sermonOutlines, setSermonOutlines, setSelectedOutline, setIsGenerating, sermonConfig }: UseSermonGenerationParams) {
+  const handleGenerateSermon = useCallback(async () => {
+    if (!sermonConfig.theme.trim()) {
+      toast({
+        title: "Missing Theme",
+        description: "Please enter a sermon theme.",
+        variant: "destructive",
+      })
+      return;
+    }
+    setIsGenerating(true);
+    try {
+      const outline = await AISermonAssistant.generateSermonOutline(
+        sermonConfig.theme,
+        sermonConfig.targetAudience,
+        sermonConfig.language,
+        sermonConfig.duration,
+      );
+      setSermonOutlines([outline, ...sermonOutlines]);
+      setSelectedOutline(outline);
+      toast({
+        title: "Sermon Outline Generated",
+        description: `Created sermon outline: \"${outline.title}\".`,
+      });
+    } catch (error) {
+      console.error("Error generating sermon:", error);
+      toast({
+        title: "Generation Failed",
+        description: "Failed to generate sermon outline. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [sermonConfig, sermonOutlines, setSermonOutlines, setSelectedOutline, setIsGenerating]);
+  return { handleGenerateSermon };
+}
+
 export default function AISermonAssistantComponent() {
   const [sermonOutlines, setSermonOutlines] = useState<SermonOutline[]>([])
   const [isGenerating, setIsGenerating] = useState(false)
@@ -90,43 +142,7 @@ export default function AISermonAssistantComponent() {
   const { language } = useAuth()
   const { t } = useTranslation(language)
 
-  const handleGenerateSermon = async () => {
-    if (!sermonConfig.theme.trim()) {
-      toast({
-        title: "Missing Theme",
-        description: "Please enter a sermon theme.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsGenerating(true)
-    try {
-      const outline = await AISermonAssistant.generateSermonOutline(
-        sermonConfig.theme,
-        sermonConfig.targetAudience,
-        sermonConfig.language,
-        sermonConfig.duration,
-      )
-
-      setSermonOutlines([outline, ...sermonOutlines])
-      setSelectedOutline(outline)
-
-      toast({
-        title: "Sermon Outline Generated",
-        description: `Created sermon outline: "${outline.title}".`,
-      })
-    } catch (error) {
-      console.error("Error generating sermon:", error)
-      toast({
-        title: "Generation Failed",
-        description: "Failed to generate sermon outline. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsGenerating(false)
-    }
-  }
+  const { handleGenerateSermon } = useSermonGeneration({ sermonOutlines, setSermonOutlines, setSelectedOutline, setIsGenerating, sermonConfig });
 
   const handleGenerateSeries = async () => {
     if (!sermonConfig.theme.trim()) {

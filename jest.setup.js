@@ -1,7 +1,6 @@
 "use client"
 
 import "@testing-library/jest-dom"
-import jest from "jest"
 
 // Mock Next.js router
 jest.mock("next/navigation", () => ({
@@ -40,3 +39,5 @@ jest.mock("@supabase/supabase-js", () => ({
     })),
   })),
 }))
+
+window.HTMLElement.prototype.scrollIntoView = function() {};

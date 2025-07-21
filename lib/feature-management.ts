@@ -53,19 +53,19 @@ export const DEFAULT_FEATURES: Feature[] = [
     enabled: true,
     category: "core",
   },
+  {
+    id: "music-ministry",
+    name: "Music Ministry",
+    description: "Choir management and music planning tools",
+    enabled: true,
+    category: "core",
+  },
 
   // Optional Features - Can be enabled/disabled
   {
     id: "pastoral-care",
     name: "Pastoral Care",
     description: "Member care, prayer requests, and pastoral support",
-    enabled: false,
-    category: "ministry",
-  },
-  {
-    id: "music-ministry",
-    name: "Music Ministry",
-    description: "Choir management and music planning tools",
     enabled: false,
     category: "ministry",
   },

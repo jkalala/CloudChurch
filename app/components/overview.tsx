@@ -4,8 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Users, Calendar, DollarSign, TrendingUp, UserPlus, CalendarDays, PiggyBank, Activity } from "lucide-react"
+import { useTranslation } from "@/lib/i18n";
+import { useAuth } from "@/components/auth-provider";
 
 export default function Overview() {
+  const { language } = useAuth();
+  const { t } = useTranslation(language);
   const stats = {
     totalMembers: 247,
     newMembersThisMonth: 12,
@@ -69,36 +73,36 @@ export default function Overview() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Membros</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("overview.totalMembers")}</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalMembers}</div>
-            <p className="text-xs text-muted-foreground">+{stats.newMembersThisMonth} este mês</p>
+            <p className="text-xs text-muted-foreground">+{stats.newMembersThisMonth} {t("overview.thisMonth")}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Membros Ativos</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("overview.activeMembers")}</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.activeMembers}</div>
             <p className="text-xs text-muted-foreground">
-              {Math.round((stats.activeMembers / stats.totalMembers) * 100)}% do total
+              {Math.round((stats.activeMembers / stats.totalMembers) * 100)}% {t("overview.ofTotal")}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Eventos Próximos</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("overview.upcomingEvents")}</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.upcomingEvents}</div>
-            <p className="text-xs text-muted-foreground">Próximos 7 dias</p>
+            <p className="text-xs text-muted-foreground">{t("overview.next7Days")}</p>
           </CardContent>
         </Card>
 

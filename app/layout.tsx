@@ -9,6 +9,7 @@ import HelpWidget from "./components/help-widget"
 import OnboardingTooltips from "./components/onboarding-tooltips"
 import { useFeature } from "@/lib/feature-management"
 import OfflineIndicator from "@/app/components/offline-indicator"
+import { AnimationProvider } from "@/lib/contexts/animation-context"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -41,11 +42,13 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <AuthProvider>
-            {children}
-            <Toaster />
-            <HelpWidget />
-            <OnboardingTooltips />
-            {isPWAEnabled && <OfflineIndicator />}
+            <AnimationProvider>
+              {children}
+              <Toaster />
+              <HelpWidget />
+              <OnboardingTooltips />
+              {isPWAEnabled && <OfflineIndicator />}
+            </AnimationProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -45,13 +45,67 @@ import {
   Info,
 } from "lucide-react"
 import { AIMusicMinistry, type Song, type SetList, type Musician, type Rehearsal } from "@/lib/ai-music-ministry"
+import type { Dispatch, SetStateAction } from "react";
 import { useTranslation } from "@/lib/i18n"
 import { useAuth } from "@/components/auth-provider"
 import { toast } from "@/hooks/use-toast"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import WaveSurfer from 'wavesurfer.js';
 
-export default function AIMusicMinistryTools() {
-  const [activeTab, setActiveTab] = useState("dashboard")
+// Custom hook for setlist generation logic
+export function useSetListGeneration({
+  setLists,
+  setSetLists,
+  setSelectedSetList,
+  setShowCreateSetList,
+  setIsLoading,
+  setListConfig
+}: {
+  setLists: SetList[];
+  setSetLists: Dispatch<SetStateAction<SetList[]>>;
+  setSelectedSetList: Dispatch<SetStateAction<SetList | null>>;
+  setShowCreateSetList: Dispatch<SetStateAction<boolean>>;
+  setIsLoading: Dispatch<SetStateAction<boolean>>;
+  setListConfig: any;
+}) {
+  const handleGenerateSetList = useCallback(async () => {
+    // eslint-disable-next-line no-console
+    console.log('HANDLE GENERATE SETLIST CALLED')
+    if (!setListConfig.title.trim()) {
+      toast({
+        title: "Please enter a setlist title",
+        variant: "destructive",
+      })
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const newSetList = await AIMusicMinistry.generateSetList(setListConfig);
+      setSetLists([newSetList, ...setLists]);
+      setSelectedSetList(newSetList);
+      setShowCreateSetList(false);
+      toast({
+        title: "AI setlist generated successfully!",
+      });
+    } catch (error) {
+      console.error("Error generating setlist:", error);
+      toast({
+        title: "Failed to generate setlist",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setListConfig, setLists, setSetLists, setSelectedSetList, setShowCreateSetList, setIsLoading]);
+  return { handleGenerateSetList };
+}
+
+type AIMusicMinistryToolsProps = {
+  initialTab?: string;
+};
+
+export default function AIMusicMinistryTools({ initialTab = "dashboard" }: AIMusicMinistryToolsProps) {
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [songs, setSongs] = useState<Song[]>([])
   const [setLists, setSetLists] = useState<SetList[]>([])
   const [musicians, setMusicians] = useState<Musician[]>([])
@@ -67,9 +121,32 @@ export default function AIMusicMinistryTools() {
   const [chordInput, setChordInput] = useState("")
   const [chordAnalysis, setChordAnalysis] = useState<any>(null)
   const [showAIBanner, setShowAIBanner] = useState(true)
+  const [waveSurfers, setWaveSurfers] = useState<Record<string, WaveSurfer | null>>({});
+  const waveformRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [firstVisit, setFirstVisit] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !localStorage.getItem('aiMusicMinistryOnboarded');
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (firstVisit && typeof window !== 'undefined') {
+      localStorage.setItem('aiMusicMinistryOnboarded', 'true');
+    }
+  }, [firstVisit]);
+
+  useEffect(() => {
+    // Clean up wavesurfers on unmount
+    return () => {
+      Object.values(waveSurfers).forEach(ws => ws && ws.destroy());
+    };
+  }, []);
 
   const { language } = useAuth()
   const { t } = useTranslation(language)
+
+  const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({})
 
   // SetList generation form
   const [setListConfig, setSetListConfig] = useState({
@@ -86,6 +163,10 @@ export default function AIMusicMinistryTools() {
   useEffect(() => {
     loadData()
   }, [])
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const loadData = async () => {
     setIsLoading(true)
@@ -105,34 +186,21 @@ export default function AIMusicMinistryTools() {
     }
   }
 
-  const handleGenerateSetList = async () => {
-    if (!setListConfig.title.trim()) {
-      toast({
-        title: "Please enter a setlist title",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsLoading(true)
-    try {
-      const newSetList = await AIMusicMinistry.generateSetList(setListConfig)
-      setSetLists([newSetList, ...setLists])
-      setSelectedSetList(newSetList)
-      setShowCreateSetList(false)
-      toast({
-        title: "AI setlist generated successfully!",
-      })
-    } catch (error) {
-      console.error("Error generating setlist:", error)
-      toast({
-        title: "Failed to generate setlist",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const { handleGenerateSetList } = useSetListGeneration({
+    setLists,
+    setSetLists,
+    setSelectedSetList,
+    setShowCreateSetList,
+    setIsLoading,
+    setListConfig
+  } as {
+    setLists: SetList[];
+    setSetLists: Dispatch<SetStateAction<SetList[]>>;
+    setSelectedSetList: Dispatch<SetStateAction<SetList | null>>;
+    setShowCreateSetList: Dispatch<SetStateAction<boolean>>;
+    setIsLoading: Dispatch<SetStateAction<boolean>>;
+    setListConfig: any;
+  });
 
   const handleRecommendSongs = async () => {
     setIsLoading(true)
@@ -153,7 +221,7 @@ export default function AIMusicMinistryTools() {
       toast({
         title: "Failed to get song recommendations",
         variant: "destructive",
-      })
+      });
     } finally {
       setIsLoading(false)
     }
@@ -175,20 +243,45 @@ export default function AIMusicMinistryTools() {
     })
   }
 
-  const handlePlaySong = (songId: string) => {
+  const handlePlaySong = (songId: string, audioUrl?: string) => {
+    if (!audioUrl) return;
+    // Pause all other players
+    Object.entries(waveSurfers).forEach(([id, ws]) => {
+      if (id !== songId && ws) ws.pause();
+    });
     if (isPlaying === songId) {
-      setIsPlaying(null)
+      waveSurfers[songId]?.pause();
+      setIsPlaying(null);
       toast({
-        title: "Playback stopped",
-        description: "Stopped playing song preview",
-      })
+        title: t("aiMusic.playbackStopped"),
+        description: t("aiMusic.stoppedPlaying"),
+      });
     } else {
-      setIsPlaying(songId)
+      if (!waveSurfers[songId] && waveformRefs.current[songId] && audioUrl) {
+        const ws = WaveSurfer.create({
+          container: waveformRefs.current[songId]!,
+          waveColor: '#a5b4fc',
+          progressColor: '#6366f1',
+          height: 48,
+          barWidth: 2,
+        });
+        ws.load(audioUrl);
+        ws.on('ready', () => {
+          ws.play();
+          setIsPlaying(songId);
+        });
+        ws.on('finish', () => setIsPlaying(null));
+        setWaveSurfers(prev => ({ ...prev, [songId]: ws }));
+      } else {
+        waveSurfers[songId]?.play();
+        setIsPlaying(songId);
+      }
       toast({
-        title: "Playing song preview",
-      })
+        title: t("aiMusic.playbackStarted"),
+        description: t("aiMusic.playingPreview"),
+      });
     }
-  }
+  };
 
   const filteredSongs = songs.filter(
     (song) =>
@@ -218,12 +311,14 @@ export default function AIMusicMinistryTools() {
         </div>
         <div className="flex gap-2">
           <Button onClick={() => setShowCreateSetList(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Generate SetList
+            <Plus className="h-4 w-4 mr-2" aria-label={t("aiMusic.generateSetList")}/>
+            <span className="sr-only">{t("aiMusic.generateSetList")}</span>
+            {t("aiMusic.generateSetList")}
           </Button>
           <Button variant="outline" onClick={() => setShowAddSong(true)}>
-            <Upload className="h-4 w-4 mr-2" />
-            Add Song
+            <Upload className="h-4 w-4 mr-2" aria-label={t("aiMusic.addSong")}/>
+            <span className="sr-only">{t("aiMusic.addSong")}</span>
+            {t("aiMusic.addSong")}
           </Button>
         </div>
       </div>
@@ -334,7 +429,7 @@ export default function AIMusicMinistryTools() {
                         <span className="font-medium">{key.key} Major</span>
                         <span>{key.percentage}%</span>
                       </div>
-                      <Progress value={key.percentage} className="h-2" />
+                      <Progress value={key.percentage} className="h-2" aria-label={`${key.key} Major key usage`} />
                     </div>
                   ))}
                 </div>
@@ -443,20 +538,25 @@ export default function AIMusicMinistryTools() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <label htmlFor="song-search" className="sr-only">{t("aiMusic.searchSongs")}</label>
                   <Input
-                    placeholder="Search songs, artists, or themes..."
+                    id="song-search"
+                    placeholder={t("aiMusic.searchSongs")}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-10"
+                    aria-label={t("aiMusic.searchSongs")}
                   />
                 </div>
-                <Button variant="outline">
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filters
+                <Button variant="outline" aria-label={t("aiMusic.filters")}> 
+                  <Filter className="h-4 w-4 mr-2" aria-label={t("aiMusic.filters")}/>
+                  <span className="sr-only">{t("aiMusic.filters")}</span>
+                  {t("aiMusic.filters")}
                 </Button>
-                <Button onClick={handleRecommendSongs}>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  AI Recommend
+                <Button onClick={handleRecommendSongs} aria-label={t("aiMusic.recommend")}> 
+                  <Sparkles className="h-4 w-4 mr-2" aria-label={t("aiMusic.recommend")}/>
+                  <span className="sr-only">{t("aiMusic.recommend")}</span>
+                  {t("aiMusic.recommend")}
                 </Button>
               </div>
             </CardContent>
@@ -514,15 +614,34 @@ export default function AIMusicMinistryTools() {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => handlePlaySong(song.id)}>
-                      {isPlaying === song.id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    <Button size="sm" variant="outline" onClick={() => handlePlaySong(song.id, song.audioUrl)} aria-label={isPlaying === song.id ? t("aiMusic.pause") : t("aiMusic.play") }>
+                      {isPlaying === song.id ? (
+                        <Pause className="h-4 w-4 animate-pulse" aria-label={t("aiMusic.pause")}/>
+                      ) : (
+                        <Play className="h-4 w-4 animate-bounce" aria-label={t("aiMusic.play")}/>
+                      )}
+                      <span className="sr-only">{isPlaying === song.id ? t("aiMusic.pause") : t("aiMusic.play")}</span>
                     </Button>
-                    <Button size="sm" variant="outline">
-                      <Download className="h-4 w-4" />
-                    </Button>
-                    <Button size="sm" onClick={() => setSelectedSong(song)}>
-                      View Details
-                    </Button>
+                    <div ref={el => { waveformRefs.current[song.id] = el; }} className="w-full h-12 my-2" />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button size="sm" variant="outline" aria-label={t("aiMusic.download")}> 
+                            <Download className="h-4 w-4" aria-label={t("aiMusic.download")}/>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t('aiMusic.downloadTooltip')}</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button size="sm" onClick={() => setSelectedSong(song)} aria-label={t("aiMusic.viewDetails")}> 
+                            <span className="sr-only">{t("aiMusic.viewDetails")}</span>
+                            {t("aiMusic.viewDetails")}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t('aiMusic.viewDetailsTooltip')}</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
                 </CardContent>
               </Card>
@@ -581,11 +700,13 @@ export default function AIMusicMinistryTools() {
                     <Button size="sm" onClick={() => setSelectedSetList(setList)}>
                       View Full
                     </Button>
-                    <Button size="sm" variant="outline">
-                      <Share2 className="h-4 w-4" />
+                    <Button size="sm" variant="outline" aria-label={t("aiMusic.share")}> 
+                      <Share2 className="h-4 w-4" aria-label={t("aiMusic.share")}/>
+                      <span className="sr-only">{t("aiMusic.share")}</span>
                     </Button>
-                    <Button size="sm" variant="outline">
-                      <Download className="h-4 w-4" />
+                    <Button size="sm" variant="outline" aria-label={t("aiMusic.download")}> 
+                      <Download className="h-4 w-4" aria-label={t("aiMusic.download")}/>
+                      <span className="sr-only">{t("aiMusic.download")}</span>
                     </Button>
                   </div>
                 </CardContent>
@@ -733,6 +854,20 @@ export default function AIMusicMinistryTools() {
                 </div>
                 <Button size="sm" variant="ghost" onClick={() => setShowAIBanner(false)}>
                   Dismiss
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+          {firstVisit && (
+            <Card className="bg-blue-50 border-blue-200 mb-4 animate-fade-in">
+              <CardContent className="flex items-center gap-4 py-4">
+                <Info className="h-6 w-6 text-blue-500 animate-bounce" />
+                <div className="flex-1">
+                  <div className="font-semibold text-blue-700">{t('aiMusic.onboardingTitle')}</div>
+                  <div className="text-sm text-blue-700">{t('aiMusic.onboardingDesc')}</div>
+                </div>
+                <Button size="sm" variant="ghost" onClick={() => setFirstVisit(false)}>
+                  {t('aiMusic.dismiss')}
                 </Button>
               </CardContent>
             </Card>
@@ -987,7 +1122,7 @@ export default function AIMusicMinistryTools() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <Input type="date" />
+                  <Input type="date" aria-label={t("aiMusic.scheduleMusiciansDate")} />
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Required Instruments:</label>
                     <div className="grid grid-cols-2 gap-2">
@@ -1039,6 +1174,7 @@ export default function AIMusicMinistryTools() {
                   type="date"
                   value={setListConfig.date}
                   onChange={(e) => setSetListConfig({ ...setListConfig, date: e.target.value })}
+                  aria-label={t("aiMusic.setListDate")}
                 />
               </div>
             </div>
@@ -1169,11 +1305,13 @@ export default function AIMusicMinistryTools() {
               <DialogTitle className="flex items-center justify-between">
                 <span>{selectedSong.title}</span>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline">
-                    <Download className="h-4 w-4" />
+                  <Button size="sm" variant="outline" aria-label={t("aiMusic.download")}> 
+                    <Download className="h-4 w-4" aria-label={t("aiMusic.download")}/>
+                    <span className="sr-only">{t("aiMusic.download")}</span>
                   </Button>
-                  <Button size="sm" variant="outline">
-                    <Share2 className="h-4 w-4" />
+                  <Button size="sm" variant="outline" aria-label={t("aiMusic.share")}> 
+                    <Share2 className="h-4 w-4" aria-label={t("aiMusic.share")}/>
+                    <span className="sr-only">{t("aiMusic.share")}</span>
                   </Button>
                 </div>
               </DialogTitle>
@@ -1294,11 +1432,13 @@ export default function AIMusicMinistryTools() {
               <DialogTitle className="flex items-center justify-between">
                 <span>{selectedSetList.title}</span>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline">
-                    <Download className="h-4 w-4" />
+                  <Button size="sm" variant="outline" aria-label={t("aiMusic.download")}> 
+                    <Download className="h-4 w-4" aria-label={t("aiMusic.download")}/>
+                    <span className="sr-only">{t("aiMusic.download")}</span>
                   </Button>
-                  <Button size="sm" variant="outline">
-                    <Share2 className="h-4 w-4" />
+                  <Button size="sm" variant="outline" aria-label={t("aiMusic.share")}> 
+                    <Share2 className="h-4 w-4" aria-label={t("aiMusic.share")}/>
+                    <span className="sr-only">{t("aiMusic.share")}</span>
                   </Button>
                 </div>
               </DialogTitle>
@@ -1364,8 +1504,9 @@ export default function AIMusicMinistryTools() {
                             {Math.floor(setListSong.estimatedDuration / 60)}:
                             {(setListSong.estimatedDuration % 60).toString().padStart(2, "0")}
                           </span>
-                          <Button size="sm" variant="ghost">
-                            <Play className="h-4 w-4" />
+                          <Button size="sm" variant="ghost" aria-label={t("aiMusic.play")}> 
+                            <Play className="h-4 w-4" aria-label={t("aiMusic.play")}/>
+                            <span className="sr-only">{t("aiMusic.play")}</span>
                           </Button>
                         </div>
                       </div>
