@@ -5,6 +5,9 @@ import { VersionHistoryViewer } from "../../components/ui/collaboration/version-
 import { Version } from "../../lib/types/version-control"
 import { useVersionControl } from "../../hooks/use-version-control"
 
+export const themeColor = "#000000";
+export const viewport = "width=device-width, initial-scale=1, maximum-scale=1";
+
 export default function VersionControlDemoPage() {
   const [resourceId, setResourceId] = useState("demo-resource")
   const [content, setContent] = useState<string>("")

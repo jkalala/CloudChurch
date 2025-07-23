@@ -8,6 +8,9 @@ import { Label } from "@/components/ui/label"
 import { ArrowLeft, Mail, Phone, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 
+export const themeColor = "#000000";
+export const viewport = "width=device-width, initial-scale=1, maximum-scale=1";
+
 export default function ForgotPasswordPage() {
   const [method, setMethod] = useState("email")
   const [step, setStep] = useState("request") // request, sent, reset

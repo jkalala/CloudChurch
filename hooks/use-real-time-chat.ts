@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { supabase } from '@/lib/supabase-client';
 import { ChatService } from "../lib/chat-service"
 import { ChatChannelType, ChatContentType } from "../lib/database-types"
 
@@ -93,7 +93,6 @@ export interface ChatActions {
 }
 
 export function useRealTimeChat(initialChannelId?: string) {
-  const supabase = createClientComponentClient()
   const chatService = useRef(new ChatService())
   const [state, setState] = useState<ChatState>({
     channels: [],
@@ -454,7 +453,7 @@ export function useRealTimeChat(initialChannelId?: string) {
         error: error as Error,
       }))
     }
-  }, [loadChannels, loadMembers, loadMessages, loadTypingIndicators, supabase])
+  }, [loadChannels, loadMembers, loadMessages, loadTypingIndicators])
   
   // Initialize
   useEffect(() => {

@@ -1,19 +1,33 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase-admin"
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase-admin";
+
+const supabase = createAdminClient();
 
 export async function GET(request: NextRequest) {
-  // List all discussions or fetch by id
-  return NextResponse.json({ discussions: [] })
+  const { data, error } = await supabase.from("bible_study_discussions").select("*");
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ discussions: data });
 }
+
 export async function POST(request: NextRequest) {
-  // Create a new discussion
-  return NextResponse.json({ success: true, discussion: {} })
+  const body = await request.json();
+  const { data, error } = await supabase.from("bible_study_discussions").insert(body).select().single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true, discussion: data });
 }
+
 export async function PATCH(request: NextRequest) {
-  // Update discussion, like/reply
-  return NextResponse.json({ success: true })
+  const body = await request.json();
+  const { id, ...updates } = body;
+  const { data, error } = await supabase.from("bible_study_discussions").update(updates).eq("id", id).select().single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true, discussion: data });
 }
+
 export async function DELETE(request: NextRequest) {
-  // Delete a discussion
-  return NextResponse.json({ success: true })
+  const body = await request.json();
+  const { id } = body;
+  const { error } = await supabase.from("bible_study_discussions").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true });
 } 

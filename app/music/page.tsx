@@ -50,6 +50,9 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 
+export const themeColor = "#000000";
+export const viewport = "width=device-width, initial-scale=1, maximum-scale=1";
+
 // Sample songs data
 const songs = [
   {

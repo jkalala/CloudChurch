@@ -75,18 +75,18 @@ export default function CreateEventModal({ isOpen, onClose, onEventCreated }: Cr
       // Prepare event data
       const eventData = {
         title: formData.title,
-        description: formData.description || null,
+        description: formData.description || undefined,
         event_date: formData.event_date,
-        start_time: formData.start_time || null,
-        end_time: formData.end_time || null,
-        location: formData.location || null,
+        start_time: formData.start_time || undefined,
+        end_time: formData.end_time || undefined,
+        location: formData.location || undefined,
         event_type: formData.event_type,
-        max_capacity: formData.max_capacity ? Number.parseInt(formData.max_capacity) : null,
-        ministry_id: formData.ministry_id || null,
+        max_capacity: formData.max_capacity ? Number.parseInt(formData.max_capacity) : undefined,
+        ministry_id: formData.ministry_id || undefined,
         registration_required: formData.registration_required,
-        registration_deadline: formData.registration_deadline || null,
-        cost: formData.cost ? Number.parseFloat(formData.cost) : null,
-        notes: formData.notes || null,
+        registration_deadline: formData.registration_deadline || undefined,
+        cost: formData.cost ? Number.parseFloat(formData.cost) : undefined,
+        notes: formData.notes || undefined,
         created_by: "current-user", // In real app, get from auth context
         created_at: new Date().toISOString(),
       }

@@ -44,7 +44,7 @@ import { useAuth } from "@/components/auth-provider"
 import { useTranslation } from "@/lib/i18n"
 import { toast } from "@/hooks/use-toast"
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
-import { createClientComponentClient } from "@/lib/supabase-client"
+import { supabase } from '@/lib/supabase-client';
 
 interface StreamSession {
   id: string
@@ -136,7 +136,6 @@ export default function LiveStreamingPlatform() {
     fetchMessages()
 
     // Supabase Realtime subscription
-    const supabase = createClientComponentClient()
     const channel = supabase.channel('chat-messages')
     channel.on(
       'postgres_changes',
@@ -274,7 +273,6 @@ export default function LiveStreamingPlatform() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewMessage(e.target.value)
     // Broadcast typing event
-    const supabase = createClientComponentClient()
     const presenceChannel = supabase.channel('chat-presence')
     presenceChannel.send({ type: 'broadcast', event: 'typing', payload: { user_id: user?.id, user_name: user?.email } })
   }

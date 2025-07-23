@@ -153,24 +153,75 @@ export interface Database {
       members: {
         Row: {
           id: string
-          name: string
-          email: string | null
-          phone: string | null
+          first_name: string
+          last_name: string
+          email?: string | null
+          phone?: string | null
+          date_of_birth?: string | null
+          gender?: string | null
+          address?: string | null
+          join_date?: string | null
+          member_status?: string | null
+          family_id?: string | null
+          face_recognition_data?: any | null
           created_at: string
+          updated_at: string
+          baptism_date?: string | null
+          membership_date?: string | null
+          profile_image?: string | null
+          marital_status?: string | null
+          occupation?: string | null
+          department?: string | null
+          emergency_contact?: string | null
+          notes?: string | null
         }
         Insert: {
           id?: string
-          name: string
+          first_name: string
+          last_name: string
           email?: string | null
           phone?: string | null
+          date_of_birth?: string | null
+          gender?: string | null
+          address?: string | null
+          join_date?: string | null
+          member_status?: string | null
+          family_id?: string | null
+          face_recognition_data?: any | null
           created_at?: string
+          updated_at?: string
+          baptism_date?: string | null
+          membership_date?: string | null
+          profile_image?: string | null
+          marital_status?: string | null
+          occupation?: string | null
+          department?: string | null
+          emergency_contact?: string | null
+          notes?: string | null
         }
         Update: {
           id?: string
-          name?: string
+          first_name?: string
+          last_name?: string
           email?: string | null
           phone?: string | null
+          date_of_birth?: string | null
+          gender?: string | null
+          address?: string | null
+          join_date?: string | null
+          member_status?: string | null
+          family_id?: string | null
+          face_recognition_data?: any | null
           created_at?: string
+          updated_at?: string
+          baptism_date?: string | null
+          membership_date?: string | null
+          profile_image?: string | null
+          marital_status?: string | null
+          occupation?: string | null
+          department?: string | null
+          emergency_contact?: string | null
+          notes?: string | null
         }
       }
       chat_channels: {

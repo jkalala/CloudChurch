@@ -11,9 +11,11 @@ import { Label } from "@/components/ui/label"
 
 interface Props {
   memberId: string
+  isOpen: boolean
+  onClose: () => void
 }
 
-export function EditMemberModal({ memberId }: Props) {
+export function EditMemberModal({ memberId, isOpen, onClose }: Props) {
   const member = {
     id: memberId,
     name: "Sample Member",
@@ -46,6 +48,9 @@ export function EditMemberModal({ memberId }: Props) {
     member_status: "active" as const,
   })
 
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
   useEffect(() => {
     setFormData({
       first_name: member.first_name || "",
@@ -63,15 +68,24 @@ export function EditMemberModal({ memberId }: Props) {
     })
   }, [memberId])
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    const name = (e.currentTarget.elements.namedItem("name") as HTMLInputElement).value
-    // Assuming member is a prop or state that can be updated
-    // member.name = name
+    setLoading(true)
+    setError(null)
+    try {
+      // TODO: Call the real update member API here
+      // await updateMember(memberId, formData)
+      // Simulate success
+      setTimeout(() => {}, 500)
+    } catch (err: any) {
+      setError(err.message || 'Erro ao editar membro')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <DialogShell title="Edit Member" triggerLabel="Edit">
+    <DialogShell title="Edit Member" isOpen={isOpen} onClose={onClose}>
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -228,12 +242,13 @@ export function EditMemberModal({ memberId }: Props) {
           />
         </div>
 
+        {error && <div className="text-red-600 text-sm">{error}</div>}
         <div className="flex justify-end space-x-2">
-          <Button type="button" variant="outline" onClick={() => alert(JSON.stringify({ id: memberId, ...formData }))}>
+          <Button type="button" variant="outline" onClick={() => alert(JSON.stringify({ id: memberId, ...formData }))} disabled={loading}>
             Cancelar
           </Button>
-          <Button type="submit" className="w-full">
-            Salvar Alterações
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? 'Salvando...' : 'Salvar Alterações'}
           </Button>
         </div>
       </form>

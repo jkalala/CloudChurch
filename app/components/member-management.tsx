@@ -37,7 +37,7 @@ import {
   Camera,
   Bell,
 } from "lucide-react"
-import { DatabaseService, type Member } from "@/lib/database"
+import { DatabaseService, type Member as ImportedMember } from "@/lib/database"
 import { AddMemberModal } from "./add-member-modal"
 import { EditMemberModal } from "./edit-member-modal"
 import { ViewMemberModal } from "./view-member-modal"
@@ -69,6 +69,8 @@ import { useIsMobile } from "@/hooks/use-mobile"
 type ViewMode = "cards" | "table" | "grid" | "list" | "compact" | "contact"
 type SortField = "name" | "email" | "joinDate" | "department" | "status"
 type SortOrder = "asc" | "desc"
+
+type Member = ImportedMember & { name?: string }
 
 interface MemberManagementProps {
   language?: Language
@@ -358,39 +360,21 @@ export default function MemberManagement() {
     })(),
   }
 
-  const handleAddMember = (memberData: Partial<Member>) => {
-    toast({ title: t("members.actions.addMemberTriggered") });
-    // Ensure id is string if present
-    if (memberData.id && typeof memberData.id === 'number') {
-      memberData.id = String(memberData.id)
-    }
-    // Ensure department is always a string
-    if (typeof memberData.department === 'undefined') {
-      memberData.department = ''
-    }
-    // Call the async function
-    (async () => {
-      await addMemberAsync(memberData)
-    })()
-  }
-
-  const addMemberAsync = async (memberData: Partial<Member>) => {
+  const handleAddMember = async (memberData: Partial<Member>) => {
     try {
-      const res = await fetch('/api/members', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(memberData),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to add member')
-      await loadMembers()
-      setShowAddModal(false)
-      toast({ title: t("members.actions.addMemberSuccess"), description: `${data.first_name} ${data.last_name} added successfully!` })
-    } catch (error: any) {
-      console.error("Error adding member:", error)
-      toast({ title: t("members.actions.addMemberError"), description: error.message || String(error), variant: "destructive" })
+      await DatabaseService.createMember({
+        ...memberData,
+      });
+      await loadMembers();
+      setShowAddModal(false);
+      toast({ title: "Member added successfully!" });
+    } catch (error) {
+      toast({ title: "Failed to add member", description: String(error), variant: "destructive" });
     }
-  }
+  };
+
+  // Alias for CSV/Excel import compatibility
+  const addMemberAsync = handleAddMember;
 
   const handleEditMember = async (memberData: Partial<Member>) => {
     if (!selectedMember) return
@@ -405,22 +389,36 @@ export default function MemberManagement() {
     }
   }
 
-  const handleDeleteMember = async (memberId: string) => {
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deletingMember, setDeletingMember] = useState<Member | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Delete handlers
+  const openDeleteDialog = (member: Member) => {
+    setDeletingMember(member);
+    setShowDeleteDialog(true);
+    setDeleteError(null);
+  };
+  const closeDeleteDialog = () => {
+    setShowDeleteDialog(false);
+    setDeletingMember(null);
+    setDeleteError(null);
+  };
+  const handleDeleteMemberConfirmed = async () => {
+    if (!deletingMember) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
     try {
-      const res = await fetch('/api/members', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: memberId }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to delete member')
-      await loadMembers()
-      toast({ title: t("members.actions.deleteMemberSuccess"), description: `Member deleted successfully!` })
-    } catch (error: any) {
-      console.error("Error deleting member:", error)
-      toast({ title: t("members.actions.deleteMemberError"), description: error.message || String(error), variant: "destructive" })
+      await DatabaseService.deleteMember(deletingMember.id);
+      await loadMembers();
+      closeDeleteDialog();
+    } catch (err: any) {
+      setDeleteError(err.message || 'Error deleting member');
+    } finally {
+      setDeleteLoading(false);
     }
-  }
+  };
 
   const handleBulkAction = async (action: string, memberIds: string[]) => {
     // Bulk actions not implemented in DatabaseService; show a toast or log for now
@@ -599,7 +597,7 @@ export default function MemberManagement() {
                         <Edit className="h-4 w-4 mr-2" />
                         {t("common.edit")}
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteMember(member.id)}>
+                      <DropdownMenuItem className="text-red-600" onClick={() => openDeleteDialog(member)}>
                         <Trash2 className="h-4 w-4 mr-2" />
                         {t("common.delete")}
                       </DropdownMenuItem>
@@ -776,7 +774,7 @@ export default function MemberManagement() {
                             <Edit className="h-4 w-4 mr-2" />
                             {t("common.edit")}
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteMember(member.id)}>
+                          <DropdownMenuItem className="text-red-600" onClick={() => openDeleteDialog(member)}>
                             <Trash2 className="h-4 w-4 mr-2" />
                             {t("common.delete")}
                           </DropdownMenuItem>
@@ -926,7 +924,7 @@ export default function MemberManagement() {
                           <Edit className="h-4 w-4 mr-2" />
                           {t("common.edit")}
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteMember(member.id)}>
+                        <DropdownMenuItem className="text-red-600" onClick={() => openDeleteDialog(member)}>
                           <Trash2 className="h-4 w-4 mr-2" />
                           {t("common.delete")}
                         </DropdownMenuItem>
@@ -1473,18 +1471,22 @@ export default function MemberManagement() {
       <AddMemberModal 
         open={showAddModal} 
         onOpenChange={setShowAddModal} 
-        onSubmit={(memberData) => {
-          const { id, ...rest } = memberData;
-          handleAddMember({
-            ...rest,
-            id: id !== undefined ? String(id) : undefined,
-          });
+        onSubmit={(data) => { 
+          const safeData: Partial<Member> = { ...data, member_status: undefined };
+          if (data.member_status && typeof data.member_status === 'string' && ["active", "inactive", "pending"].includes(data.member_status)) {
+            safeData.member_status = data.member_status as "active" | "inactive" | "pending";
+          }
+          void handleAddMember(safeData); 
         }} 
       />
 
       {selectedMember && (
         <>
-          <EditMemberModal memberId={String(selectedMember.id)} />
+          <EditMemberModal 
+            memberId={String(selectedMember.id)} 
+            isOpen={showEditModal} 
+            onClose={() => setShowEditModal(false)} 
+          />
           {selectedMember && showViewModal && (
             <ViewMemberModal memberId={selectedMember.id} />
           )}
@@ -1683,6 +1685,22 @@ export default function MemberManagement() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDuplicatesModal(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Member</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete this member?</div>
+          {deleteError && <div className="text-red-600 text-sm">{deleteError}</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeDeleteDialog} disabled={deleteLoading}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteMemberConfirmed} disabled={deleteLoading}>
+              {deleteLoading ? 'Deleting...' : 'Delete'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

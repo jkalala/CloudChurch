@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -43,6 +43,7 @@ import {
   Share2,
   Sliders,
   Info,
+  Trash2,
 } from "lucide-react"
 import { AIMusicMinistry, type Song, type SetList, type Musician, type Rehearsal } from "@/lib/ai-music-ministry"
 import type { Dispatch, SetStateAction } from "react";
@@ -52,7 +53,17 @@ import { toast } from "@/hooks/use-toast"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import WaveSurfer from 'wavesurfer.js';
 
-// Custom hook for setlist generation logic
+/**
+ * Custom hook for setlist generation logic
+ * @param {Object} params - Parameters for setlist generation
+ * @param {SetList[]} params.setLists - Current setlists
+ * @param {Dispatch<SetStateAction<SetList[]>>} params.setSetLists - State setter for setlists
+ * @param {Dispatch<SetStateAction<SetList | null>>} params.setSelectedSetList - State setter for selected setlist
+ * @param {Dispatch<SetStateAction<boolean>>} params.setShowCreateSetList - State setter for create setlist modal
+ * @param {Dispatch<SetStateAction<boolean>>} params.setIsLoading - State setter for loading state
+ * @param {any} params.setListConfig - Configuration for setlist generation
+ * @returns {Object} - Handler function for generating setlists
+ */
 export function useSetListGeneration({
   setLists,
   setSetLists,
@@ -69,8 +80,6 @@ export function useSetListGeneration({
   setListConfig: any;
 }) {
   const handleGenerateSetList = useCallback(async () => {
-    // eslint-disable-next-line no-console
-    console.log('HANDLE GENERATE SETLIST CALLED')
     if (!setListConfig.title.trim()) {
       toast({
         title: "Please enter a setlist title",
@@ -80,23 +89,23 @@ export function useSetListGeneration({
     }
     setIsLoading(true);
     try {
-      const newSetList = await AIMusicMinistry.generateSetList(setListConfig);
-      setSetLists([newSetList, ...setLists]);
-      setSelectedSetList(newSetList);
+      const res = await fetch('/api/music/setlists/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(setListConfig),
+      });
+      const data = await res.json();
+      setSetLists([data.setList, ...setLists]);
+      setSelectedSetList(data.setList);
       setShowCreateSetList(false);
-      toast({
-        title: "AI setlist generated successfully!",
-      });
+      toast({ title: 'AI setlist generated successfully!' });
     } catch (error) {
-      console.error("Error generating setlist:", error);
-      toast({
-        title: "Failed to generate setlist",
-        variant: "destructive",
-      });
+      toast({ title: 'Failed to generate setlist', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
   }, [setListConfig, setLists, setSetLists, setSelectedSetList, setShowCreateSetList, setIsLoading]);
+
   return { handleGenerateSetList };
 }
 
@@ -104,25 +113,38 @@ type AIMusicMinistryToolsProps = {
   initialTab?: string;
 };
 
+/**
+ * Main component for AI Music Ministry Tools
+ * Provides a comprehensive interface for managing songs, setlists, musicians, and rehearsals
+ * with AI-powered features for generation and optimization.
+ */
 export default function AIMusicMinistryTools({ initialTab = "dashboard" }: AIMusicMinistryToolsProps) {
-  const [activeTab, setActiveTab] = useState(initialTab)
-  const [songs, setSongs] = useState<Song[]>([])
-  const [setLists, setSetLists] = useState<SetList[]>([])
-  const [musicians, setMusicians] = useState<Musician[]>([])
-  const [rehearsals, setRehearsals] = useState<Rehearsal[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedSong, setSelectedSong] = useState<Song | null>(null)
-  const [selectedSetList, setSelectedSetList] = useState<SetList | null>(null)
-  const [isPlaying, setIsPlaying] = useState<string | null>(null)
-  const [showCreateSetList, setShowCreateSetList] = useState(false)
-  const [showAddSong, setShowAddSong] = useState(false)
-  const [showChordAnalyzer, setShowChordAnalyzer] = useState(false)
-  const [chordInput, setChordInput] = useState("")
-  const [chordAnalysis, setChordAnalysis] = useState<any>(null)
-  const [showAIBanner, setShowAIBanner] = useState(true)
+  // State management for tabs and data
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [songs, setSongs] = useState<Song[]>([]);
+  const [setLists, setSetLists] = useState<SetList[]>([]);
+  const [musicians, setMusicians] = useState<Musician[]>([]);
+  const [rehearsals, setRehearsals] = useState<Rehearsal[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // State for selected items
+  const [selectedSong, setSelectedSong] = useState<Song | null>(null);
+  const [selectedSetList, setSelectedSetList] = useState<SetList | null>(null);
+  
+  // State for audio playback
+  const [isPlaying, setIsPlaying] = useState<string | null>(null);
   const [waveSurfers, setWaveSurfers] = useState<Record<string, WaveSurfer | null>>({});
   const waveformRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  
+  // State for modals and forms
+  const [showCreateSetList, setShowCreateSetList] = useState(false);
+  const [showChordAnalyzer, setShowChordAnalyzer] = useState(false);
+  const [chordInput, setChordInput] = useState("");
+  const [chordAnalysis, setChordAnalysis] = useState<any>(null);
+  const [showAIBanner, setShowAIBanner] = useState(true);
+  
+  // Onboarding state
   const [firstVisit, setFirstVisit] = useState(() => {
     if (typeof window !== 'undefined') {
       return !localStorage.getItem('aiMusicMinistryOnboarded');
@@ -130,25 +152,7 @@ export default function AIMusicMinistryTools({ initialTab = "dashboard" }: AIMus
     return false;
   });
 
-  useEffect(() => {
-    if (firstVisit && typeof window !== 'undefined') {
-      localStorage.setItem('aiMusicMinistryOnboarded', 'true');
-    }
-  }, [firstVisit]);
-
-  useEffect(() => {
-    // Clean up wavesurfers on unmount
-    return () => {
-      Object.values(waveSurfers).forEach(ws => ws && ws.destroy());
-    };
-  }, []);
-
-  const { language } = useAuth()
-  const { t } = useTranslation(language)
-
-  const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({})
-
-  // SetList generation form
+  // SetList generation form state
   const [setListConfig, setSetListConfig] = useState({
     title: "",
     date: new Date().toISOString().split("T")[0],
@@ -158,34 +162,61 @@ export default function AIMusicMinistryTools({ initialTab = "dashboard" }: AIMus
     language: "en",
     includeHymns: true,
     maxSongs: 6,
-  })
+  });
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  // Form states for CRUD operations
+  const [showSongModal, setShowSongModal] = useState(false);
+  const [editingSong, setEditingSong] = useState<Song | null>(null);
+  const [songForm, setSongForm] = useState<Partial<Song>>({});
+  const [songFormLoading, setSongFormLoading] = useState(false);
+  const [songFormError, setSongFormError] = useState<string | null>(null);
+  
+  const [showSetListModal, setShowSetListModal] = useState(false);
+  const [editingSetList, setEditingSetList] = useState<SetList | null>(null);
+  const [setListForm, setSetListForm] = useState<Partial<SetList>>({});
+  const [setListFormLoading, setSetListFormLoading] = useState(false);
+  const [setListFormError, setSetListFormError] = useState<string | null>(null);
+  
+  const [showMusicianModal, setShowMusicianModal] = useState(false);
+  const [editingMusician, setEditingMusician] = useState<Musician | null>(null);
+  const [musicianForm, setMusicianForm] = useState<Partial<Musician>>({});
+  const [musicianFormLoading, setMusicianFormLoading] = useState(false);
+  const [musicianFormError, setMusicianFormError] = useState<string | null>(null);
+  
+  const [showRehearsalModal, setShowRehearsalModal] = useState(false);
+  const [editingRehearsal, setEditingRehearsal] = useState<Rehearsal | null>(null);
+  const [rehearsalForm, setRehearsalForm] = useState<Partial<Rehearsal>>({});
+  const [rehearsalFormLoading, setRehearsalFormLoading] = useState(false);
+  const [rehearsalFormError, setRehearsalFormError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setActiveTab(initialTab);
-  }, [initialTab]);
+  // Delete confirmation states
+  const [showSongDeleteDialog, setShowSongDeleteDialog] = useState(false);
+  const [deletingSong, setDeletingSong] = useState<Song | null>(null);
+  const [songDeleteLoading, setSongDeleteLoading] = useState(false);
+  const [songDeleteError, setSongDeleteError] = useState<string | null>(null);
+  
+  const [showSetListDeleteDialog, setShowSetListDeleteDialog] = useState(false);
+  const [deletingSetList, setDeletingSetList] = useState<SetList | null>(null);
+  const [setListDeleteLoading, setSetListDeleteLoading] = useState(false);
+  const [setListDeleteError, setSetListDeleteError] = useState<string | null>(null);
+  
+  const [showMusicianDeleteDialog, setShowMusicianDeleteDialog] = useState(false);
+  const [deletingMusician, setDeletingMusician] = useState<Musician | null>(null);
+  const [musicianDeleteLoading, setMusicianDeleteLoading] = useState(false);
+  const [musicianDeleteError, setMusicianDeleteError] = useState<string | null>(null);
+  
+  const [showRehearsalDeleteDialog, setShowRehearsalDeleteDialog] = useState(false);
+  const [deletingRehearsal, setDeletingRehearsal] = useState<Rehearsal | null>(null);
+  const [rehearsalDeleteLoading, setRehearsalDeleteLoading] = useState(false);
+  const [rehearsalDeleteError, setRehearsalDeleteError] = useState<string | null>(null);
 
-  const loadData = async () => {
-    setIsLoading(true)
-    try {
-      setSongs(AIMusicMinistry.getSongs())
-      setSetLists(AIMusicMinistry.getSetLists())
-      setMusicians(AIMusicMinistry.getMusicians())
-      setRehearsals(AIMusicMinistry.getRehearsals())
-    } catch (error) {
-      console.error("Error loading music ministry data:", error)
-      toast({
-        title: "Failed to load music ministry data",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  // 1. Add state:
+  const [recommendedSongs, setRecommendedSongs] = useState<Song[]>([]);
+  const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const [recommendationError, setRecommendationError] = useState<string | null>(null);
 
+  const { language } = useAuth();
+  const { t } = useTranslation(language);
   const { handleGenerateSetList } = useSetListGeneration({
     setLists,
     setSetLists,
@@ -193,62 +224,522 @@ export default function AIMusicMinistryTools({ initialTab = "dashboard" }: AIMus
     setShowCreateSetList,
     setIsLoading,
     setListConfig
-  } as {
-    setLists: SetList[];
-    setSetLists: Dispatch<SetStateAction<SetList[]>>;
-    setSelectedSetList: Dispatch<SetStateAction<SetList | null>>;
-    setShowCreateSetList: Dispatch<SetStateAction<boolean>>;
-    setIsLoading: Dispatch<SetStateAction<boolean>>;
-    setListConfig: any;
   });
 
-  const handleRecommendSongs = async () => {
-    setIsLoading(true)
+  // Clean up wavesurfers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(waveSurfers).forEach(ws => ws && ws.destroy());
+    };
+  }, []);
+
+  // Set active tab when initialTab changes
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  // Mark onboarding as complete
+  useEffect(() => {
+    if (firstVisit && typeof window !== 'undefined') {
+      localStorage.setItem('aiMusicMinistryOnboarded', 'true');
+    }
+  }, [firstVisit]);
+
+  /**
+   * Fetches songs from the backend API
+   */
+  const fetchSongs = async () => {
+    setIsLoading(true);
     try {
-      const recommendations = await AIMusicMinistry.recommendSongs({
-        theme: setListConfig.theme,
-        serviceType: setListConfig.serviceType,
-        language: setListConfig.language,
-        duration: setListConfig.duration,
-      })
-
-      toast({
-        title: `Found ${recommendations.length} recommended songs`,
-      })
-      // You could display these in a modal or update the UI
-    } catch (error) {
-      console.error("Error getting recommendations:", error)
-      toast({
-        title: "Failed to get song recommendations",
-        variant: "destructive",
-      });
+      const res = await fetch('/api/music/songs');
+      const data = await res.json();
+      setSongs(data.songs || []);
+    } catch (err) {
+      setSongFormError('Failed to load songs');
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
-  const handleAnalyzeChords = () => {
-    if (!chordInput.trim()) {
-      toast({
-        title: "Please enter chord progression",
-        variant: "destructive",
-      })
-      return
+  /**
+   * Fetches setlists from the backend API
+   */
+  const fetchSetlists = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/music/setlists');
+      const data = await res.json();
+      setSetLists(data.setlists || []);
+    } catch (err) {
+      setSetListFormError('Failed to load setlists');
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    const analysis = AIMusicMinistry.analyzeChordProgression(chordInput)
-    setChordAnalysis(analysis)
-    toast({
-      title: "Chord progression analyzed!",
-    })
-  }
+  /**
+   * Fetches musicians from the backend API
+   */
+  const fetchMusicians = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/music/musicians');
+      const data = await res.json();
+      setMusicians(data.musicians || []);
+    } catch (err) {
+      setMusicianFormError('Failed to load musicians');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  /**
+   * Fetches rehearsals from the backend API
+   */
+  const fetchRehearsals = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/music/rehearsals');
+      const data = await res.json();
+      setRehearsals(data.rehearsals || []);
+    } catch (err) {
+      setRehearsalFormError('Failed to load rehearsals');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Initial data load
+  useEffect(() => {
+    fetchSongs();
+    fetchSetlists();
+    fetchMusicians();
+    fetchRehearsals();
+  }, []);
+
+  /**
+   * Handles song form submission (create/update)
+   * @param {React.FormEvent} e - Form event
+   */
+  const handleSongFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSongFormLoading(true);
+    setSongFormError(null);
+    try {
+      let resp;
+      if (editingSong) {
+        resp = await fetch('/api/music/songs', { 
+          method: 'PATCH', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ id: editingSong.id, ...songForm }) 
+        });
+      } else {
+        resp = await fetch('/api/music/songs', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify(songForm) 
+        });
+      }
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to save song');
+      toast({ title: 'Song saved successfully!', variant: 'default' });
+      await fetchSongs();
+      closeSongModal();
+    } catch (err: any) {
+      setSongFormError(err.message || 'Failed to save song');
+      toast({ title: err.message || 'Failed to save song', variant: 'destructive' });
+    } finally {
+      setSongFormLoading(false);
+    }
+  };
+
+  /**
+   * Handles song deletion
+   */
+  const handleDeleteSong = async () => {
+    if (!deletingSong) return;
+    setSongDeleteLoading(true);
+    setSongDeleteError(null);
+    try {
+      const resp = await fetch('/api/music/songs', { 
+        method: 'DELETE', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ id: deletingSong.id }) 
+      });
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to delete song');
+      toast({ title: 'Song deleted successfully!', variant: 'default' });
+      await fetchSongs();
+      closeSongDeleteDialog();
+    } catch (err: any) {
+      setSongDeleteError(err.message || 'Failed to delete song');
+      toast({ title: err.message || 'Failed to delete song', variant: 'destructive' });
+    } finally {
+      setSongDeleteLoading(false);
+    }
+  };
+
+  /**
+   * Handles setlist form submission (create/update)
+   * @param {React.FormEvent} e - Form event
+   */
+  const handleSetListFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSetListFormLoading(true);
+    setSetListFormError(null);
+    try {
+      let resp;
+      if (editingSetList) {
+        resp = await fetch('/api/music/setlists', { 
+          method: 'PATCH', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ id: editingSetList.id, ...setListForm }) 
+        });
+      } else {
+        resp = await fetch('/api/music/setlists', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify(setListForm) 
+        });
+      }
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to save setlist');
+      toast({ title: 'Setlist saved successfully!', variant: 'default' });
+      await fetchSetlists();
+      closeSetListModal();
+    } catch (err: any) {
+      setSetListFormError(err.message || 'Failed to save setlist');
+      toast({ title: err.message || 'Failed to save setlist', variant: 'destructive' });
+    } finally {
+      setSetListFormLoading(false);
+    }
+  };
+
+  /**
+   * Handles setlist deletion
+   */
+  const handleDeleteSetList = async () => {
+    if (!deletingSetList) return;
+    setSetListDeleteLoading(true);
+    setSetListDeleteError(null);
+    try {
+      const resp = await fetch('/api/music/setlists', { 
+        method: 'DELETE', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ id: deletingSetList.id }) 
+      });
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to delete setlist');
+      toast({ title: 'Setlist deleted successfully!', variant: 'default' });
+      await fetchSetlists();
+      closeSetListDeleteDialog();
+    } catch (err: any) {
+      setSetListDeleteError(err.message || 'Failed to delete setlist');
+      toast({ title: err.message || 'Failed to delete setlist', variant: 'destructive' });
+    } finally {
+      setSetListDeleteLoading(false);
+    }
+  };
+
+  /**
+   * Handles musician form submission (create/update)
+   * @param {React.FormEvent} e - Form event
+   */
+  const handleMusicianFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMusicianFormLoading(true);
+    setMusicianFormError(null);
+    try {
+      let resp;
+      if (editingMusician) {
+        resp = await fetch('/api/music/musicians', { 
+          method: 'PATCH', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ id: editingMusician.id, ...musicianForm }) 
+        });
+      } else {
+        resp = await fetch('/api/music/musicians', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify(musicianForm) 
+        });
+      }
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to save musician');
+      toast({ title: 'Musician saved successfully!', variant: 'default' });
+      await fetchMusicians();
+      closeMusicianModal();
+    } catch (err: any) {
+      setMusicianFormError(err.message || 'Failed to save musician');
+      toast({ title: err.message || 'Failed to save musician', variant: 'destructive' });
+    } finally {
+      setMusicianFormLoading(false);
+    }
+  };
+
+  /**
+   * Handles musician deletion
+   */
+  const handleDeleteMusician = async () => {
+    if (!deletingMusician) return;
+    setMusicianDeleteLoading(true);
+    setMusicianDeleteError(null);
+    try {
+      const resp = await fetch('/api/music/musicians', { 
+        method: 'DELETE', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ id: deletingMusician.id }) 
+      });
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to delete musician');
+      toast({ title: 'Musician deleted successfully!', variant: 'default' });
+      await fetchMusicians();
+      closeMusicianDeleteDialog();
+    } catch (err: any) {
+      setMusicianDeleteError(err.message || 'Failed to delete musician');
+      toast({ title: err.message || 'Failed to delete musician', variant: 'destructive' });
+    } finally {
+      setMusicianDeleteLoading(false);
+    }
+  };
+
+  /**
+   * Handles rehearsal form submission (create/update)
+   * @param {React.FormEvent} e - Form event
+   */
+  const handleRehearsalFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRehearsalFormLoading(true);
+    setRehearsalFormError(null);
+    try {
+      let resp;
+      if (editingRehearsal) {
+        resp = await fetch('/api/music/rehearsals', { 
+          method: 'PATCH', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ id: editingRehearsal.id, ...rehearsalForm }) 
+        });
+      } else {
+        resp = await fetch('/api/music/rehearsals', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify(rehearsalForm) 
+        });
+      }
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to save rehearsal');
+      toast({ title: 'Rehearsal saved successfully!', variant: 'default' });
+      await fetchRehearsals();
+      closeRehearsalModal();
+    } catch (err: any) {
+      setRehearsalFormError(err.message || 'Failed to save rehearsal');
+      toast({ title: err.message || 'Failed to save rehearsal', variant: 'destructive' });
+    } finally {
+      setRehearsalFormLoading(false);
+    }
+  };
+
+  /**
+   * Handles rehearsal deletion
+   */
+  const handleDeleteRehearsal = async () => {
+    if (!deletingRehearsal) return;
+    setRehearsalDeleteLoading(true);
+    setRehearsalDeleteError(null);
+    try {
+      const resp = await fetch('/api/music/rehearsals', { 
+        method: 'DELETE', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ id: deletingRehearsal.id }) 
+      });
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to delete rehearsal');
+      toast({ title: 'Rehearsal deleted successfully!', variant: 'default' });
+      await fetchRehearsals();
+      closeRehearsalDeleteDialog();
+    } catch (err: any) {
+      setRehearsalDeleteError(err.message || 'Failed to delete rehearsal');
+      toast({ title: err.message || 'Failed to delete rehearsal', variant: 'destructive' });
+    } finally {
+      setRehearsalDeleteLoading(false);
+    }
+  };
+
+  /**
+   * Handles form changes for song form
+   * @param {React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>} e - Change event
+   */
+  const handleSongFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setSongForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  /**
+   * Handles form changes for setlist form
+   * @param {React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>} e - Change event
+   */
+  const handleSetListFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setSetListForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  /**
+   * Handles form changes for musician form
+   * @param {React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>} e - Change event
+   */
+  const handleMusicianFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setMusicianForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  /**
+   * Handles form changes for rehearsal form
+   * @param {React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>} e - Change event
+   */
+  const handleRehearsalFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setRehearsalForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Modal open/close handlers
+  const openNewSongModal = () => { 
+    setEditingSong(null); 
+    setSongForm({}); 
+    setShowSongModal(true); 
+    setSongFormError(null); 
+  };
+
+  const openEditSongModal = (song: Song) => { 
+    setEditingSong(song); 
+    setSongForm(song); 
+    setShowSongModal(true); 
+    setSongFormError(null); 
+  };
+
+  const closeSongModal = () => { 
+    setShowSongModal(false); 
+    setEditingSong(null); 
+    setSongForm({}); 
+    setSongFormError(null); 
+  };
+
+  const openNewSetListModal = () => { 
+    setEditingSetList(null); 
+    setSetListForm({}); 
+    setShowSetListModal(true); 
+    setSetListFormError(null); 
+  };
+
+  const openEditSetListModal = (setList: SetList) => { 
+    setEditingSetList(setList); 
+    setSetListForm(setList); 
+    setShowSetListModal(true); 
+    setSetListFormError(null); 
+  };
+
+  const closeSetListModal = () => { 
+    setShowSetListModal(false); 
+    setEditingSetList(null); 
+    setSetListForm({}); 
+    setSetListFormError(null); 
+  };
+
+  const openNewMusicianModal = () => { 
+    setEditingMusician(null); 
+    setMusicianForm({}); 
+    setShowMusicianModal(true); 
+    setMusicianFormError(null); 
+  };
+
+  const openEditMusicianModal = (musician: Musician) => { 
+    setEditingMusician(musician); 
+    setMusicianForm(musician); 
+    setShowMusicianModal(true); 
+    setMusicianFormError(null); 
+  };
+
+  const closeMusicianModal = () => { 
+    setShowMusicianModal(false); 
+    setEditingMusician(null); 
+    setMusicianForm({}); 
+    setMusicianFormError(null); 
+  };
+
+  const openNewRehearsalModal = () => { 
+    setEditingRehearsal(null); 
+    setRehearsalForm({}); 
+    setShowRehearsalModal(true); 
+    setRehearsalFormError(null); 
+  };
+
+  const openEditRehearsalModal = (rehearsal: Rehearsal) => { 
+    setEditingRehearsal(rehearsal); 
+    setRehearsalForm(rehearsal); 
+    setShowRehearsalModal(true); 
+    setRehearsalFormError(null); 
+  };
+
+  const closeRehearsalModal = () => { 
+    setShowRehearsalModal(false); 
+    setEditingRehearsal(null); 
+    setRehearsalForm({}); 
+    setRehearsalFormError(null); 
+  };
+
+  // Delete dialog handlers
+  const openSongDeleteDialog = (song: Song) => { 
+    setDeletingSong(song); 
+    setShowSongDeleteDialog(true); 
+    setSongDeleteError(null); 
+  };
+
+  const closeSongDeleteDialog = () => { 
+    setShowSongDeleteDialog(false); 
+    setDeletingSong(null); 
+    setSongDeleteError(null); 
+  };
+
+  const openSetListDeleteDialog = (setList: SetList) => { 
+    setDeletingSetList(setList); 
+    setShowSetListDeleteDialog(true); 
+    setSetListDeleteError(null); 
+  };
+
+  const closeSetListDeleteDialog = () => { 
+    setShowSetListDeleteDialog(false); 
+    setDeletingSetList(null); 
+    setSetListDeleteError(null); 
+  };
+
+  const openMusicianDeleteDialog = (musician: Musician) => { 
+    setDeletingMusician(musician); 
+    setShowMusicianDeleteDialog(true); 
+    setMusicianDeleteError(null); 
+  };
+
+  const closeMusicianDeleteDialog = () => { 
+    setShowMusicianDeleteDialog(false); 
+    setDeletingMusician(null); 
+    setMusicianDeleteError(null); 
+  };
+
+  const openRehearsalDeleteDialog = (rehearsal: Rehearsal) => { 
+    setDeletingRehearsal(rehearsal); 
+    setShowRehearsalDeleteDialog(true); 
+    setRehearsalDeleteError(null); 
+  };
+
+  const closeRehearsalDeleteDialog = () => { 
+    setShowRehearsalDeleteDialog(false); 
+    setDeletingRehearsal(null); 
+    setRehearsalDeleteError(null); 
+  };
+
+  /**
+   * Handles song playback
+   * @param {string} songId - ID of the song to play
+   * @param {string} [audioUrl] - Optional audio URL
+   */
   const handlePlaySong = (songId: string, audioUrl?: string) => {
     if (!audioUrl) return;
+    
     // Pause all other players
     Object.entries(waveSurfers).forEach(([id, ws]) => {
       if (id !== songId && ws) ws.pause();
     });
+
     if (isPlaying === songId) {
       waveSurfers[songId]?.pause();
       setIsPlaying(null);
@@ -283,14 +774,79 @@ export default function AIMusicMinistryTools({ initialTab = "dashboard" }: AIMus
     }
   };
 
+  /**
+   * Gets AI song recommendations based on current setlist config
+   */
+  const handleRecommendSongs = async () => {
+    setRecommendationLoading(true);
+    setRecommendationError(null);
+    try {
+      const res = await fetch('/api/music/songs/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          theme: setListConfig.theme,
+          serviceType: setListConfig.serviceType,
+          language: setListConfig.language,
+          duration: setListConfig.duration,
+        }),
+      });
+      const data = await res.json();
+      setRecommendedSongs(data.songs || []);
+      toast({ title: `Found ${data.songs.length} recommended songs` });
+    } catch (error) {
+      setRecommendationError('Failed to get song recommendations');
+      toast({ title: 'Failed to get song recommendations', variant: 'destructive' });
+    } finally {
+      setRecommendationLoading(false);
+    }
+  };
+
+  /**
+   * Analyzes chord progression input
+   */
+  const handleAnalyzeChords = () => {
+    if (!chordInput.trim()) {
+      toast({
+        title: "Please enter chord progression",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const analysis = AIMusicMinistry.analyzeChordProgression(chordInput);
+    setChordAnalysis(analysis);
+    toast({
+      title: "Chord progression analyzed!",
+    });
+  };
+
+  // Filter songs based on search query
   const filteredSongs = songs.filter(
     (song) =>
       song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       song.artist.toLowerCase().includes(searchQuery.toLowerCase()) ||
       song.themes.some((theme) => theme.toLowerCase().includes(searchQuery.toLowerCase())),
-  )
+  );
 
-  const analytics = AIMusicMinistry.generateAnalytics()
+  // Add at the top of the component:
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+
+  // Fetch analytics on mount and when dashboard tab is selected
+  useEffect(() => {
+    if (activeTab === 'dashboard') {
+      setIsLoading(true);
+      fetch('/api/music/analytics')
+        .then(res => res.json())
+        .then(data => {
+          setAnalytics(data);
+          setAnalyticsError(null);
+        })
+        .catch(() => setAnalyticsError('Failed to load analytics'))
+        .finally(() => setIsLoading(false));
+    }
+  }, [activeTab]);
 
   return (
     <div className="space-y-6">
@@ -315,10 +871,9 @@ export default function AIMusicMinistryTools({ initialTab = "dashboard" }: AIMus
             <span className="sr-only">{t("aiMusic.generateSetList")}</span>
             {t("aiMusic.generateSetList")}
           </Button>
-          <Button variant="outline" onClick={() => setShowAddSong(true)}>
-            <Upload className="h-4 w-4 mr-2" aria-label={t("aiMusic.addSong")}/>
-            <span className="sr-only">{t("aiMusic.addSong")}</span>
-            {t("aiMusic.addSong")}
+          <Button variant="outline" onClick={openNewSongModal}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Song
           </Button>
         </div>
       </div>
@@ -382,115 +937,115 @@ export default function AIMusicMinistryTools({ initialTab = "dashboard" }: AIMus
 
         {/* Dashboard Tab */}
         <TabsContent value="dashboard" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Popular Songs */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-green-500" />
-                  Most Popular Songs
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {analytics.popularSongs.map((song, index) => (
-                    <div key={song.songId} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
-                          {index + 1}
+          {isLoading && <div>Loading analytics...</div>}
+          {analyticsError && <div className="text-red-600">{analyticsError}</div>}
+          {analytics && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Popular Songs */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-green-500" />
+                    Most Popular Songs
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {analytics.popularSongs.map((song: any, index: number) => (
+                      <div key={song.songId} className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
+                            {index + 1}
+                          </div>
+                          <div>
+                            <p className="font-medium">{song.title}</p>
+                            <p className="text-sm text-muted-foreground">{song.timesPlayed} times played</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium">{song.title}</p>
-                          <p className="text-sm text-muted-foreground">{song.timesPlayed} times played</p>
+                        <Button size="sm" variant="ghost">
+                          <Play className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+              {/* Key Usage */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Piano className="h-5 w-5 text-blue-500" />
+                    Key Usage Distribution
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {analytics.keyUsage.map((key: any) => (
+                      <div key={key.key} className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="font-medium">{key.key} Major</span>
+                          <span>{key.percentage}%</span>
+                        </div>
+                        <Progress value={key.percentage} className="h-2" aria-label={`${key.key} Major key usage`} />
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+              {/* Genre Distribution */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart className="h-5 w-5 text-purple-500" />
+                    Genre Distribution
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {analytics.genreDistribution.map((genre: any) => (
+                      <div key={genre.genre} className="flex items-center justify-between">
+                        <span className="capitalize font-medium">{genre.genre}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-20 bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full"
+                              style={{ width: `${genre.percentage}%` }}
+                            />
+                          </div>
+                          <span className="text-sm text-muted-foreground">{genre.count}</span>
                         </div>
                       </div>
-                      <Button size="sm" variant="ghost">
-                        <Play className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Key Usage */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Piano className="h-5 w-5 text-blue-500" />
-                  Key Usage Distribution
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {analytics.keyUsage.map((key) => (
-                    <div key={key.key} className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="font-medium">{key.key} Major</span>
-                        <span>{key.percentage}%</span>
-                      </div>
-                      <Progress value={key.percentage} className="h-2" aria-label={`${key.key} Major key usage`} />
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Genre Distribution */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart className="h-5 w-5 text-purple-500" />
-                  Genre Distribution
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {analytics.genreDistribution.map((genre) => (
-                    <div key={genre.genre} className="flex items-center justify-between">
-                      <span className="capitalize font-medium">{genre.genre}</span>
-                      <div className="flex items-center gap-2">
-                        <div className="w-20 bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full"
-                            style={{ width: `${genre.percentage}%` }}
-                          />
-                        </div>
-                        <span className="text-sm text-muted-foreground">{genre.count}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Service Metrics */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5 text-orange-500" />
-                  Service Metrics
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Avg Songs/Service</span>
-                    <span className="font-bold">{analytics.serviceMetrics.averageSongsPerService}</span>
+                    ))}
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Avg Duration</span>
-                    <span className="font-bold">{analytics.serviceMetrics.averageServiceDuration} min</span>
+                </CardContent>
+              </Card>
+              {/* Service Metrics */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Target className="h-5 w-5 text-orange-500" />
+                    Service Metrics
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Avg Songs/Service</span>
+                      <span className="font-bold">{analytics.serviceMetrics.averageSongsPerService}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Avg Duration</span>
+                      <span className="font-bold">{analytics.serviceMetrics.averageServiceDuration} min</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Popular Time</span>
+                      <span className="font-bold">{analytics.serviceMetrics.mostPopularServiceTime}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Popular Time</span>
-                    <span className="font-bold">{analytics.serviceMetrics.mostPopularServiceTime}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
+                </CardContent>
+              </Card>
+            </div>
+          )}
           {/* Recent Activity */}
           <Card>
             <CardHeader>
@@ -641,6 +1196,24 @@ export default function AIMusicMinistryTools({ initialTab = "dashboard" }: AIMus
                         </TooltipTrigger>
                         <TooltipContent>{t('aiMusic.viewDetailsTooltip')}</TooltipContent>
                       </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button size="sm" variant="outline" onClick={() => openEditSongModal(song)} aria-label={t("aiMusic.edit")}> 
+                            <Wand2 className="h-4 w-4" aria-label={t("aiMusic.edit")}/>
+                            <span className="sr-only">{t("aiMusic.edit")}</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t('aiMusic.editTooltip')}</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button size="sm" variant="destructive" onClick={() => openSongDeleteDialog(song)} aria-label={t("aiMusic.delete")}> 
+                            <Trash2 className="h-4 w-4" aria-label={t("aiMusic.delete")}/>
+                            <span className="sr-only">{t("aiMusic.delete")}</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t('aiMusic.deleteTooltip')}</TooltipContent>
+                      </Tooltip>
                     </TooltipProvider>
                   </div>
                 </CardContent>
@@ -700,6 +1273,14 @@ export default function AIMusicMinistryTools({ initialTab = "dashboard" }: AIMus
                     <Button size="sm" onClick={() => setSelectedSetList(setList)}>
                       View Full
                     </Button>
+                    <Button size="sm" variant="outline" onClick={() => openEditSetListModal(setList)} aria-label={t("aiMusic.edit")}> 
+                      <Wand2 className="h-4 w-4" aria-label={t("aiMusic.edit")}/>
+                      <span className="sr-only">{t("aiMusic.edit")}</span>
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => openSetListDeleteDialog(setList)} aria-label={t("aiMusic.delete")}> 
+                      <Trash2 className="h-4 w-4" aria-label={t("aiMusic.delete")}/>
+                      <span className="sr-only">{t("aiMusic.delete")}</span>
+                    </Button>
                     <Button size="sm" variant="outline" aria-label={t("aiMusic.share")}> 
                       <Share2 className="h-4 w-4" aria-label={t("aiMusic.share")}/>
                       <span className="sr-only">{t("aiMusic.share")}</span>
@@ -713,6 +1294,10 @@ export default function AIMusicMinistryTools({ initialTab = "dashboard" }: AIMus
               </Card>
             ))}
           </div>
+          <Button variant="outline" onClick={openNewSetListModal}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add SetList
+          </Button>
         </TabsContent>
 
         {/* Musicians Tab */}
@@ -778,6 +1363,10 @@ export default function AIMusicMinistryTools({ initialTab = "dashboard" }: AIMus
               </Card>
             ))}
           </div>
+          <Button variant="outline" onClick={openNewMusicianModal}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Musician
+          </Button>
         </TabsContent>
 
         {/* Rehearsals Tab */}
@@ -837,6 +1426,10 @@ export default function AIMusicMinistryTools({ initialTab = "dashboard" }: AIMus
               </Card>
             ))}
           </div>
+          <Button variant="outline" onClick={openNewRehearsalModal}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Rehearsal
+          </Button>
         </TabsContent>
 
         {/* AI Tools Tab */}
@@ -1053,6 +1646,23 @@ export default function AIMusicMinistryTools({ initialTab = "dashboard" }: AIMus
                     <Brain className="h-4 w-4 mr-2" />
                     Get Recommendations
                   </Button>
+                  {recommendationLoading && <div>Loading recommendations...</div>}
+                  {recommendationError && <div className="text-red-600">{recommendationError}</div>}
+                  {recommendedSongs.length > 0 && (
+                    <div className="space-y-2 mt-4">
+                      {recommendedSongs.map(song => (
+                        <Card key={song.id} className="p-2">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <div className="font-medium">{song.title}</div>
+                              <div className="text-sm text-muted-foreground">{song.artist} • {song.genre} • {song.key}</div>
+                            </div>
+                            <Button size="sm" variant="outline" onClick={() => setSelectedSong(song)}>View</Button>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               <Card>
@@ -1531,6 +2141,200 @@ export default function AIMusicMinistryTools({ initialTab = "dashboard" }: AIMus
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Song Modal */}
+      <Dialog open={showSongModal} onOpenChange={setShowSongModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingSong ? 'Edit Song' : 'Add Song'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSongFormSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="title">Title</label>
+              <input name="title" value={songForm.title || ''} onChange={handleSongFormChange} required className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="artist">Artist</label>
+              <input name="artist" value={songForm.artist || ''} onChange={handleSongFormChange} required className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="genre">Genre</label>
+              <input name="genre" value={songForm.genre || ''} onChange={handleSongFormChange} className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="key">Key</label>
+              <input name="key" value={songForm.key || ''} onChange={handleSongFormChange} className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="duration">Duration (seconds)</label>
+              <input type="number" name="duration" value={songForm.duration || ''} onChange={handleSongFormChange} className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="difficulty">Difficulty</label>
+              <select name="difficulty" value={songForm.difficulty || ''} onChange={handleSongFormChange} className="w-full border rounded px-2 py-1">
+                <option value="">Select</option>
+                <option value="beginner">Beginner</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
+            </div>
+            {songFormError && <div className="text-red-600 text-sm">{songFormError}</div>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeSongModal} disabled={songFormLoading}>Cancel</Button>
+              <Button type="submit" disabled={songFormLoading}>{songFormLoading ? 'Saving...' : 'Save'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {/* Song Delete Confirmation Dialog */}
+      <Dialog open={showSongDeleteDialog} onOpenChange={setShowSongDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Song</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete this song?</div>
+          {songDeleteError && <div className="text-red-600 text-sm">{songDeleteError}</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeSongDeleteDialog} disabled={songDeleteLoading}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteSong} disabled={songDeleteLoading}>{songDeleteLoading ? 'Deleting...' : 'Delete'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* SetList Modal */}
+      <Dialog open={showSetListModal} onOpenChange={setShowSetListModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingSetList ? 'Edit SetList' : 'Add SetList'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSetListFormSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="title">Title</label>
+              <input name="title" value={setListForm.title || ''} onChange={handleSetListFormChange} required className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="date">Date</label>
+              <input type="date" name="date" value={setListForm.date || ''} onChange={handleSetListFormChange} className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="serviceType">Service Type</label>
+              <input name="serviceType" value={setListForm.serviceType || ''} onChange={handleSetListFormChange} className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="theme">Theme</label>
+              <input name="theme" value={setListForm.theme || ''} onChange={handleSetListFormChange} className="w-full border rounded px-2 py-1" />
+            </div>
+            {setListFormError && <div className="text-red-600 text-sm">{setListFormError}</div>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeSetListModal} disabled={setListFormLoading}>Cancel</Button>
+              <Button type="submit" disabled={setListFormLoading}>{setListFormLoading ? 'Saving...' : 'Save'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {/* SetList Delete Confirmation Dialog */}
+      <Dialog open={showSetListDeleteDialog} onOpenChange={setShowSetListDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete SetList</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete this setlist?</div>
+          {setListDeleteError && <div className="text-red-600 text-sm">{setListDeleteError}</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeSetListDeleteDialog} disabled={setListDeleteLoading}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteSetList} disabled={setListDeleteLoading}>{setListDeleteLoading ? 'Deleting...' : 'Delete'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Musician Modal */}
+      <Dialog open={showMusicianModal} onOpenChange={setShowMusicianModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingMusician ? 'Edit Musician' : 'Add Musician'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleMusicianFormSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="name">Name</label>
+              <input name="name" value={musicianForm.name || ''} onChange={handleMusicianFormChange} required className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="instruments">Instruments</label>
+              <input
+                name="instruments"
+                value={Array.isArray(musicianForm.instruments) ? musicianForm.instruments.join(", ") : ""}
+                onChange={e =>
+                  setMusicianForm(prev => ({
+                    ...prev,
+                    instruments: e.target.value.split(",").map(s => s.trim()).filter(Boolean)
+                  }))
+                }
+                className="w-full border rounded px-2 py-1"
+              />
+            </div>
+            {musicianFormError && <div className="text-red-600 text-sm">{musicianFormError}</div>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeMusicianModal} disabled={musicianFormLoading}>Cancel</Button>
+              <Button type="submit" disabled={musicianFormLoading}>{musicianFormLoading ? 'Saving...' : 'Save'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {/* Musician Delete Confirmation Dialog */}
+      <Dialog open={showMusicianDeleteDialog} onOpenChange={setShowMusicianDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Musician</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete this musician?</div>
+          {musicianDeleteError && <div className="text-red-600 text-sm">{musicianDeleteError}</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeMusicianDeleteDialog} disabled={musicianDeleteLoading}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteMusician} disabled={musicianDeleteLoading}>{musicianDeleteLoading ? 'Deleting...' : 'Delete'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Rehearsal Modal */}
+      <Dialog open={showRehearsalModal} onOpenChange={setShowRehearsalModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingRehearsal ? 'Edit Rehearsal' : 'Add Rehearsal'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleRehearsalFormSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="title">Title</label>
+              <input name="title" value={rehearsalForm.title || ''} onChange={handleRehearsalFormChange} required className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="date">Date</label>
+              <input type="date" name="date" value={rehearsalForm.date || ''} onChange={handleRehearsalFormChange} className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="location">Location</label>
+              <input name="location" value={rehearsalForm.location || ''} onChange={handleRehearsalFormChange} className="w-full border rounded px-2 py-1" />
+            </div>
+            {rehearsalFormError && <div className="text-red-600 text-sm">{rehearsalFormError}</div>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeRehearsalModal} disabled={rehearsalFormLoading}>Cancel</Button>
+              <Button type="submit" disabled={rehearsalFormLoading}>{rehearsalFormLoading ? 'Saving...' : 'Save'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {/* Rehearsal Delete Confirmation Dialog */}
+      <Dialog open={showRehearsalDeleteDialog} onOpenChange={setShowRehearsalDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Rehearsal</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete this rehearsal?</div>
+          {rehearsalDeleteError && <div className="text-red-600 text-sm">{rehearsalDeleteError}</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeRehearsalDeleteDialog} disabled={rehearsalDeleteLoading}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteRehearsal} disabled={rehearsalDeleteLoading}>{rehearsalDeleteLoading ? 'Deleting...' : 'Delete'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
-  )
+  );
 }

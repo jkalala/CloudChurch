@@ -65,11 +65,12 @@ export function createClientComponentClient<Db = Database>() {
 }
 
 export function createServerComponentClient<Db = Database>() {
-  const serverKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? supabaseAnonKey
+  // Provide a default cookies function as required by the type definition
+  return _createServerComponentClient<Db>({ cookies: () => { return {} as any; } });
+}
 
-  return _createServerComponentClient<Db>({
-    supabaseUrl,
-    supabaseKey: serverKey,
-    // cookies typed param is optional; auth-helpers will read it internally
-  })
+export function getAuthenticatedClient() {
+  // For now, just return the default supabase client
+  // In the future, this could be extended to handle user sessions, etc.
+  return supabase;
 }

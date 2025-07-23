@@ -87,7 +87,7 @@ export default function AIToolsPage() {
       case 'assistant': return 'Ask me anything about church management...';
       case 'bible-tools': return 'Enter a Bible verse or topic to study...';
       case 'sermon': return 'What sermon topic are you preparing?';
-      case 'worship': return 'What's the theme for your worship service?';
+      case 'worship': return "What's the theme for your worship service?";
       case 'email': return 'What type of email do you need to send?';
       case 'insights': return 'What insights are you looking for?';
       default: return 'How can I help you today?';

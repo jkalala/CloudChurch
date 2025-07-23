@@ -8,6 +8,9 @@ import { useOffline } from "@/hooks/use-offline"
 import { useEffect, useState } from "react"
 import { offlineStorage } from "@/lib/offline-storage"
 
+export const themeColor = "#000000";
+export const viewport = "width=device-width, initial-scale=1, maximum-scale=1";
+
 export default function OfflinePage() {
   const router = useRouter()
   const { isOnline, isOfflineReady, addPendingSync, getOfflineData } = useOffline()

@@ -22,9 +22,19 @@ interface ViewMemberModalProps {
 }
 
 export function ViewMemberModal({ memberId }: ViewMemberModalProps) {
-  // All hooks at the top!
   const [member, setMember] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    setLoading(true)
+    DatabaseService.getMemberById(memberId).then(m => {
+      setMember(m)
+      setLoading(false)
+    })
+  }, [memberId])
+  if (loading) return <div>Loading...</div>
+  if (!member) return <div>Member not found.</div>
+
+  // --- New state for tabs ---
   const [tab, setTab] = useState<'attachments' | 'fields' | 'tags'>('attachments')
   const [attachments, setAttachments] = useState<any[]>([])
   const [uploading, setUploading] = useState(false)
@@ -36,17 +46,6 @@ export function ViewMemberModal({ memberId }: ViewMemberModalProps) {
   const dropRef = useRef<HTMLDivElement>(null)
   const [dragActive, setDragActive] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
-  const [open, setOpen] = useState(true)
-  const [showCard, setShowCard] = useState(false)
-  const cardRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    setLoading(true)
-    DatabaseService.getMemberById(memberId).then(m => {
-      setMember(m)
-      setLoading(false)
-    })
-  }, [memberId])
   useEffect(() => {
     MemberService.getAttachments(memberId).then((r: any) => setAttachments(r.attachments || []))
     MemberService.getCustomFields().then((r: any) => setCustomFields(r.customFields || []))
@@ -54,10 +53,11 @@ export function ViewMemberModal({ memberId }: ViewMemberModalProps) {
     MemberService.getTags(memberId).then((r: any) => setTags(r.tags || []))
     MemberService.getTags().then((r: any) => setAllTags(r.tags || []))
   }, [memberId])
+  // ---
 
-  // Only after all hooks:
-  if (loading) return <div>Loading...</div>
-  if (!member) return <div>Member not found.</div>
+  const [open, setOpen] = useState(true)
+  const [showCard, setShowCard] = useState(false)
+  const cardRef = useRef<HTMLDivElement>(null)
 
   const getStatusColor = (status: string) => {
     switch (status) {

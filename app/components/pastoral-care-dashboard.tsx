@@ -36,6 +36,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/components/auth-provider";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 export default function PastoralCareDashboard() {
   const { language } = useAuth();
@@ -50,6 +51,164 @@ export default function PastoralCareDashboard() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
   const { toast } = useToast()
+  const [showCareModal, setShowCareModal] = useState(false);
+  const [editingCare, setEditingCare] = useState<CareRecord | null>(null);
+  const [careForm, setCareForm] = useState<Partial<CareRecord>>({});
+  const [careFormLoading, setCareFormLoading] = useState(false);
+  const [careFormError, setCareFormError] = useState<string | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deletingCare, setDeletingCare] = useState<CareRecord | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [showPrayerModal, setShowPrayerModal] = useState(false);
+  const [editingPrayer, setEditingPrayer] = useState<PrayerRequest | null>(null);
+  const [prayerForm, setPrayerForm] = useState<Partial<PrayerRequest>>({});
+  const [prayerFormLoading, setPrayerFormLoading] = useState(false);
+  const [prayerFormError, setPrayerFormError] = useState<string | null>(null);
+  const [showPrayerDeleteDialog, setShowPrayerDeleteDialog] = useState(false);
+  const [deletingPrayer, setDeletingPrayer] = useState<PrayerRequest | null>(null);
+  const [prayerDeleteLoading, setPrayerDeleteLoading] = useState(false);
+  const [prayerDeleteError, setPrayerDeleteError] = useState<string | null>(null);
+  const [showCrisisModal, setShowCrisisModal] = useState(false);
+  const [editingCrisis, setEditingCrisis] = useState<CrisisAlert | null>(null);
+  const [crisisForm, setCrisisForm] = useState<Partial<CrisisAlert>>({});
+  const [crisisFormLoading, setCrisisFormLoading] = useState(false);
+  const [crisisFormError, setCrisisFormError] = useState<string | null>(null);
+  const [showCrisisDeleteDialog, setShowCrisisDeleteDialog] = useState(false);
+  const [deletingCrisis, setDeletingCrisis] = useState<CrisisAlert | null>(null);
+  const [crisisDeleteLoading, setCrisisDeleteLoading] = useState(false);
+  const [crisisDeleteError, setCrisisDeleteError] = useState<string | null>(null);
+
+  // Handlers for modal
+  const openNewCareModal = () => { setEditingCare(null); setCareForm({}); setShowCareModal(true); setCareFormError(null); };
+  const openEditCareModal = (record: CareRecord) => { setEditingCare(record); setCareForm(record); setShowCareModal(true); setCareFormError(null); };
+  const closeCareModal = () => { setShowCareModal(false); setEditingCare(null); setCareForm({}); setCareFormError(null); };
+  const handleCareFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setCareForm(prev => ({ ...prev, [name]: value }));
+  };
+  const handleCareFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCareFormLoading(true);
+    setCareFormError(null);
+    try {
+      if (editingCare) {
+        await PastoralCareService.updateCareRecord(editingCare.id, careForm);
+      } else {
+        await PastoralCareService.createCareRecord(careForm);
+      }
+      await loadDashboardData();
+      closeCareModal();
+    } catch (err: any) {
+      setCareFormError(err.message || 'Erro ao salvar registro de cuidado');
+    } finally {
+      setCareFormLoading(false);
+    }
+  };
+  // Delete handlers
+  const openDeleteDialog = (record: CareRecord) => { setDeletingCare(record); setShowDeleteDialog(true); setDeleteError(null); };
+  const closeDeleteDialog = () => { setShowDeleteDialog(false); setDeletingCare(null); setDeleteError(null); };
+  const handleDeleteCare = async () => {
+    if (!deletingCare) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      await PastoralCareService.deleteCareRecord(deletingCare.id);
+      await loadDashboardData();
+      closeDeleteDialog();
+    } catch (err: any) {
+      setDeleteError(err.message || 'Erro ao excluir registro');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+  const openNewPrayerModal = () => { setEditingPrayer(null); setPrayerForm({}); setShowPrayerModal(true); setPrayerFormError(null); };
+  const openEditPrayerModal = (request: PrayerRequest) => { setEditingPrayer(request); setPrayerForm(request); setShowPrayerModal(true); setPrayerFormError(null); };
+  const closePrayerModal = () => { setShowPrayerModal(false); setEditingPrayer(null); setPrayerForm({}); setPrayerFormError(null); };
+  const handlePrayerFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    // Only use checked for checkboxes
+    const checked = (type === 'checkbox' && 'checked' in e.target) ? (e.target as HTMLInputElement).checked : undefined;
+    setPrayerForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  };
+  const handlePrayerFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPrayerFormLoading(true);
+    setPrayerFormError(null);
+    try {
+      if (editingPrayer) {
+        await PastoralCareService.updatePrayerRequest(editingPrayer.id, prayerForm);
+      } else {
+        await PastoralCareService.createPrayerRequest(prayerForm);
+      }
+      await loadDashboardData();
+      closePrayerModal();
+    } catch (err: any) {
+      setPrayerFormError(err.message || 'Erro ao salvar pedido de oração');
+    } finally {
+      setPrayerFormLoading(false);
+    }
+  };
+  // Delete handlers
+  const openPrayerDeleteDialog = (request: PrayerRequest) => { setDeletingPrayer(request); setShowPrayerDeleteDialog(true); setPrayerDeleteError(null); };
+  const closePrayerDeleteDialog = () => { setShowPrayerDeleteDialog(false); setDeletingPrayer(null); setPrayerDeleteError(null); };
+  const handleDeletePrayer = async () => {
+    if (!deletingPrayer) return;
+    setPrayerDeleteLoading(true);
+    setPrayerDeleteError(null);
+    try {
+      await PastoralCareService.deletePrayerRequest(deletingPrayer.id);
+      await loadDashboardData();
+      closePrayerDeleteDialog();
+    } catch (err: any) {
+      setPrayerDeleteError(err.message || 'Erro ao excluir pedido');
+    } finally {
+      setPrayerDeleteLoading(false);
+    }
+  };
+  const openNewCrisisModal = () => { setEditingCrisis(null); setCrisisForm({}); setShowCrisisModal(true); setCrisisFormError(null); };
+  const openEditCrisisModal = (alert: CrisisAlert) => { setEditingCrisis(alert); setCrisisForm(alert); setShowCrisisModal(true); setCrisisFormError(null); };
+  const closeCrisisModal = () => { setShowCrisisModal(false); setEditingCrisis(null); setCrisisForm({}); setCrisisFormError(null); };
+  const handleCrisisFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    const checked = (type === 'checkbox' && 'checked' in e.target) ? (e.target as HTMLInputElement).checked : undefined;
+    setCrisisForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  };
+  const handleCrisisFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCrisisFormLoading(true);
+    setCrisisFormError(null);
+    try {
+      if (editingCrisis) {
+        await PastoralCareService.updateCrisisAlert(editingCrisis.id, crisisForm);
+      } else {
+        await PastoralCareService.createCrisisAlert(crisisForm);
+      }
+      await loadDashboardData();
+      closeCrisisModal();
+    } catch (err: any) {
+      setCrisisFormError(err.message || 'Erro ao salvar alerta de crise');
+    } finally {
+      setCrisisFormLoading(false);
+    }
+  };
+  // Delete handlers
+  const openCrisisDeleteDialog = (alert: CrisisAlert) => { setDeletingCrisis(alert); setShowCrisisDeleteDialog(true); setCrisisDeleteError(null); };
+  const closeCrisisDeleteDialog = () => { setShowCrisisDeleteDialog(false); setDeletingCrisis(null); setCrisisDeleteError(null); };
+  const handleDeleteCrisis = async () => {
+    if (!deletingCrisis) return;
+    setCrisisDeleteLoading(true);
+    setCrisisDeleteError(null);
+    try {
+      await PastoralCareService.deleteCrisisAlert(deletingCrisis.id);
+      await loadDashboardData();
+      closeCrisisDeleteDialog();
+    } catch (err: any) {
+      setCrisisDeleteError(err.message || 'Erro ao excluir alerta');
+    } finally {
+      setCrisisDeleteLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadDashboardData()
@@ -337,7 +496,7 @@ export default function PastoralCareDashboard() {
                 <Search className="h-4 w-4 mr-2" />
                 Search
               </Button>
-              <Button size="sm">
+              <Button size="sm" onClick={openNewCareModal}>
                 <Plus className="h-4 w-4 mr-2" />
                 New Record
               </Button>
@@ -380,11 +539,14 @@ export default function PastoralCareDashboard() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={() => openEditCareModal(record)}>
                         Edit
                       </Button>
                       <Button variant="outline" size="sm">
                         View
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => openDeleteDialog(record)}>
+                        Delete
                       </Button>
                     </div>
                   </div>
@@ -397,7 +559,7 @@ export default function PastoralCareDashboard() {
         <TabsContent value="prayer-requests" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold">Prayer Requests</h3>
-            <Button size="sm">
+            <Button size="sm" onClick={openNewPrayerModal}>
               <Plus className="h-4 w-4 mr-2" />
               New Request
             </Button>
@@ -434,11 +596,17 @@ export default function PastoralCareDashboard() {
                       </div>
                     </div>
                     <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openEditPrayerModal(request)}>
+                        Edit
+                      </Button>
                       <Button variant="outline" size="sm">
                         Pray
                       </Button>
                       <Button variant="outline" size="sm">
                         Follow Up
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => openPrayerDeleteDialog(request)}>
+                        Delete
                       </Button>
                     </div>
                   </div>
@@ -451,7 +619,7 @@ export default function PastoralCareDashboard() {
         <TabsContent value="crisis-alerts" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold">Crisis Alerts</h3>
-            <Button size="sm" variant="destructive">
+            <Button size="sm" onClick={openNewCrisisModal}>
               <Plus className="h-4 w-4 mr-2" />
               New Alert
             </Button>
@@ -490,11 +658,11 @@ export default function PastoralCareDashboard() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="destructive" size="sm">
-                        Respond
+                      <Button variant="outline" size="sm" onClick={() => openEditCrisisModal(alert)}>
+                        Edit
                       </Button>
-                      <Button variant="outline" size="sm">
-                        Details
+                      <Button variant="destructive" size="sm" onClick={() => openCrisisDeleteDialog(alert)}>
+                        Delete
                       </Button>
                     </div>
                   </div>
@@ -548,6 +716,204 @@ export default function PastoralCareDashboard() {
           </div>
         </TabsContent>
       </Tabs>
+      {/* Care Record Modal */}
+      <Dialog open={showCareModal} onOpenChange={setShowCareModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingCare ? 'Edit Care Record' : 'New Care Record'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCareFormSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="title">Title</label>
+              <input name="title" value={careForm.title || ''} onChange={handleCareFormChange} required className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="description">Description</label>
+              <textarea name="description" value={careForm.description || ''} onChange={handleCareFormChange} className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="priority">Priority</label>
+              <select name="priority" value={careForm.priority || ''} onChange={handleCareFormChange} required className="w-full border rounded px-2 py-1">
+                <option value="">Select</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="status">Status</label>
+              <select name="status" value={careForm.status || ''} onChange={handleCareFormChange} required className="w-full border rounded px-2 py-1">
+                <option value="">Select</option>
+                <option value="scheduled">Scheduled</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="follow_up_needed">Follow Up Needed</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="scheduled_date">Scheduled Date</label>
+              <input type="date" name="scheduled_date" value={careForm.scheduled_date || ''} onChange={handleCareFormChange} className="w-full border rounded px-2 py-1" />
+            </div>
+            {careFormError && <div className="text-red-600 text-sm">{careFormError}</div>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeCareModal} disabled={careFormLoading}>Cancel</Button>
+              <Button type="submit" disabled={careFormLoading}>{careFormLoading ? 'Saving...' : 'Save'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Care Record</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete this care record?</div>
+          {deleteError && <div className="text-red-600 text-sm">{deleteError}</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeDeleteDialog} disabled={deleteLoading}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteCare} disabled={deleteLoading}>{deleteLoading ? 'Deleting...' : 'Delete'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Prayer Request Modal */}
+      <Dialog open={showPrayerModal} onOpenChange={setShowPrayerModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingPrayer ? 'Edit Prayer Request' : 'New Prayer Request'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handlePrayerFormSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="title">Title</label>
+              <input name="title" value={prayerForm.title || ''} onChange={handlePrayerFormChange} required className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="description">Description</label>
+              <textarea name="description" value={prayerForm.description || ''} onChange={handlePrayerFormChange} className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="priority">Priority</label>
+              <select name="priority" value={prayerForm.priority || ''} onChange={handlePrayerFormChange} required className="w-full border rounded px-2 py-1">
+                <option value="">Select</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="status">Status</label>
+              <select name="status" value={prayerForm.status || ''} onChange={handlePrayerFormChange} required className="w-full border rounded px-2 py-1">
+                <option value="">Select</option>
+                <option value="active">Active</option>
+                <option value="answered">Answered</option>
+                <option value="ongoing">Ongoing</option>
+                <option value="closed">Closed</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="is_anonymous">
+                <input type="checkbox" name="is_anonymous" checked={!!prayerForm.is_anonymous} onChange={handlePrayerFormChange} /> Anonymous
+              </label>
+            </div>
+            <div>
+              <label htmlFor="is_public">
+                <input type="checkbox" name="is_public" checked={!!prayerForm.is_public} onChange={handlePrayerFormChange} /> Public
+              </label>
+            </div>
+            {prayerFormError && <div className="text-red-600 text-sm">{prayerFormError}</div>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closePrayerModal} disabled={prayerFormLoading}>Cancel</Button>
+              <Button type="submit" disabled={prayerFormLoading}>{prayerFormLoading ? 'Saving...' : 'Save'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {/* Prayer Delete Confirmation Dialog */}
+      <Dialog open={showPrayerDeleteDialog} onOpenChange={setShowPrayerDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Prayer Request</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete this prayer request?</div>
+          {prayerDeleteError && <div className="text-red-600 text-sm">{prayerDeleteError}</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closePrayerDeleteDialog} disabled={prayerDeleteLoading}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeletePrayer} disabled={prayerDeleteLoading}>{prayerDeleteLoading ? 'Deleting...' : 'Delete'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Crisis Alert Modal */}
+      <Dialog open={showCrisisModal} onOpenChange={setShowCrisisModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingCrisis ? 'Edit Crisis Alert' : 'New Crisis Alert'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCrisisFormSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="title">Title</label>
+              <input name="title" value={crisisForm.title || ''} onChange={handleCrisisFormChange} required className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="description">Description</label>
+              <textarea name="description" value={crisisForm.description || ''} onChange={handleCrisisFormChange} className="w-full border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label htmlFor="severity">Severity</label>
+              <select name="severity" value={crisisForm.severity || ''} onChange={handleCrisisFormChange} required className="w-full border rounded px-2 py-1">
+                <option value="">Select</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="status">Status</label>
+              <select name="status" value={crisisForm.status || ''} onChange={handleCrisisFormChange} required className="w-full border rounded px-2 py-1">
+                <option value="">Select</option>
+                <option value="active">Active</option>
+                <option value="responding">Responding</option>
+                <option value="resolved">Resolved</option>
+                <option value="escalated">Escalated</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="alert_type">Alert Type</label>
+              <select name="alert_type" value={crisisForm.alert_type || ''} onChange={handleCrisisFormChange} required className="w-full border rounded px-2 py-1">
+                <option value="">Select</option>
+                <option value="medical">Medical</option>
+                <option value="mental_health">Mental Health</option>
+                <option value="family_crisis">Family Crisis</option>
+                <option value="financial">Financial</option>
+                <option value="spiritual">Spiritual</option>
+                <option value="emergency">Emergency</option>
+              </select>
+            </div>
+            {crisisFormError && <div className="text-red-600 text-sm">{crisisFormError}</div>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeCrisisModal} disabled={crisisFormLoading}>Cancel</Button>
+              <Button type="submit" disabled={crisisFormLoading}>{crisisFormLoading ? 'Saving...' : 'Save'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {/* Crisis Delete Confirmation Dialog */}
+      <Dialog open={showCrisisDeleteDialog} onOpenChange={setShowCrisisDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Crisis Alert</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete this crisis alert?</div>
+          {crisisDeleteError && <div className="text-red-600 text-sm">{crisisDeleteError}</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeCrisisDeleteDialog} disabled={crisisDeleteLoading}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteCrisis} disabled={crisisDeleteLoading}>{crisisDeleteLoading ? 'Deleting...' : 'Delete'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -13,6 +13,9 @@ const sections = [
   { id: "developer-guide", label: "Developer Guide" },
 ]
 
+export const themeColor = "#000000";
+export const viewport = "width=device-width, initial-scale=1, maximum-scale=1";
+
 export default function DocumentationPage() {
   return (
     <div className="flex max-w-6xl mx-auto p-6 gap-8">

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { supabase } from '@/lib/supabase-client';
 import { VersionControlService } from "../lib/version-control-service"
 import { Version, VersionDiff } from "../lib/types/version-control"
 
@@ -28,7 +28,6 @@ export function useVersionControl<T = any>({
   resourceType,
   initialLoad = true,
 }: VersionControlOptions) {
-  const supabase = createClientComponentClient()
   const [state, setState] = useState<VersionControlState<T>>({
     versions: [],
     currentVersion: null,

@@ -35,17 +35,17 @@ import {
   Activity,
 } from "lucide-react"
 import { useTranslation } from "@/lib/i18n"
-import { toast } from "@/hooks/use-toast"
-import { createClientComponentClient } from "@/lib/supabase-client"
+import { toast } from "sonner"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { EditorContent, useEditor } from '@tiptap/react'
 import Collaboration from '@tiptap/extension-collaboration'
 import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
 import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket'
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
-import { useIsMobile } from "@/hooks/use-mobile"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartTooltip, ResponsiveContainer } from "recharts"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
+import { supabase } from '@/lib/supabase-client'
 
 interface BibleVerse {
   id: string
@@ -160,7 +160,251 @@ export default function InteractiveBibleStudy() {
   const [isClient, setIsClient] = useState(false)
   useEffect(() => { setIsClient(true) }, [])
 
-  const supabase = createClientComponentClient()
+  // --- CRUD State for Studies ---
+  const [showEditStudy, setShowEditStudy] = useState(false);
+  const [editingStudy, setEditingStudy] = useState<StudyPlan | null>(null);
+  const [showDeleteStudy, setShowDeleteStudy] = useState(false);
+  const [deletingStudy, setDeletingStudy] = useState<StudyPlan | null>(null);
+  const [studyForm, setStudyForm] = useState<Partial<StudyPlan>>({});
+  const [studyFormLoading, setStudyFormLoading] = useState(false);
+  const [studyFormError, setStudyFormError] = useState<string | null>(null);
+  const [deleteStudyLoading, setDeleteStudyLoading] = useState(false);
+  const [deleteStudyError, setDeleteStudyError] = useState<string | null>(null);
+
+  // --- CRUD State for Lessons ---
+  const [showEditLesson, setShowEditLesson] = useState(false);
+  const [editingLesson, setEditingLesson] = useState<StudyLesson | null>(null);
+  const [showDeleteLesson, setShowDeleteLesson] = useState(false);
+  const [deletingLesson, setDeletingLesson] = useState<StudyLesson | null>(null);
+  const [lessonForm, setLessonForm] = useState<Partial<StudyLesson>>({});
+  const [lessonFormLoading, setLessonFormLoading] = useState(false);
+  const [lessonFormError, setLessonFormError] = useState<string | null>(null);
+  const [deleteLessonLoading, setDeleteLessonLoading] = useState(false);
+  const [deleteLessonError, setDeleteLessonError] = useState<string | null>(null);
+
+  // --- CRUD State for Groups ---
+  const [showEditGroup, setShowEditGroup] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<StudyGroup | null>(null);
+  const [showDeleteGroup, setShowDeleteGroup] = useState(false);
+  const [deletingGroup, setDeletingGroup] = useState<StudyGroup | null>(null);
+  const [groupForm, setGroupForm] = useState<Partial<StudyGroup>>({});
+  const [groupFormLoading, setGroupFormLoading] = useState(false);
+  const [groupFormError, setGroupFormError] = useState<string | null>(null);
+  const [deleteGroupLoading, setDeleteGroupLoading] = useState(false);
+  const [deleteGroupError, setDeleteGroupError] = useState<string | null>(null);
+
+  // --- CRUD State for Discussions ---
+  const [showEditDiscussion, setShowEditDiscussion] = useState(false);
+  const [editingDiscussion, setEditingDiscussion] = useState<Discussion | null>(null);
+  const [showDeleteDiscussion, setShowDeleteDiscussion] = useState(false);
+  const [deletingDiscussion, setDeletingDiscussion] = useState<Discussion | null>(null);
+  const [discussionForm, setDiscussionForm] = useState<Partial<Discussion>>({});
+  const [discussionFormLoading, setDiscussionFormLoading] = useState(false);
+  const [discussionFormError, setDiscussionFormError] = useState<string | null>(null);
+  const [deleteDiscussionLoading, setDeleteDiscussionLoading] = useState(false);
+  const [deleteDiscussionError, setDeleteDiscussionError] = useState<string | null>(null);
+
+  // --- Pagination and Sorting State ---
+  const [studiesPage, setStudiesPage] = useState(1);
+  const [studiesPerPage] = useState(6);
+  const [groupsPage, setGroupsPage] = useState(1);
+  const [groupsPerPage] = useState(6);
+  const [studySortField, setStudySortField] = useState<'title' | 'createdAt' | 'participants'>('title');
+  const [studySortOrder, setStudySortOrder] = useState<'asc' | 'desc'>('asc');
+  const [groupSortField, setGroupSortField] = useState<'name'>('name');
+  const [groupSortOrder, setGroupSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  // --- Enhanced CRUD Handlers: Add toasts and error handling ---
+  const handleStudyFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStudyFormLoading(true);
+    setStudyFormError(null);
+    try {
+      let resp;
+      if (editingStudy) {
+        resp = await fetch('/api/bible-study', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingStudy.id, ...studyForm }) });
+      } else {
+        resp = await fetch('/api/bible-study', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(studyForm) });
+      }
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to save study');
+      toast.success('Study saved successfully!');
+      await fetchStudies();
+      closeEditStudyModal();
+    } catch (err: any) {
+      setStudyFormError(err.message || 'Failed to save study');
+      toast.error(err.message || 'Failed to save study');
+    } finally {
+      setStudyFormLoading(false);
+    }
+  };
+  const handleDeleteStudy = async () => {
+    if (!deletingStudy) return;
+    setDeleteStudyLoading(true);
+    setDeleteStudyError(null);
+    try {
+      const resp = await fetch('/api/bible-study', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: deletingStudy.id }) });
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to delete study');
+      toast.success('Study deleted successfully!');
+      await fetchStudies();
+      closeDeleteStudyDialog();
+    } catch (err: any) {
+      setDeleteStudyError(err.message || 'Failed to delete study');
+      toast.error(err.message || 'Failed to delete study');
+    } finally {
+      setDeleteStudyLoading(false);
+    }
+  };
+
+  // --- CRUD Handlers for Lessons ---
+  const openNewLessonModal = () => { setEditingLesson(null); setLessonForm({}); setShowEditLesson(true); setLessonFormError(null); };
+  const openEditLessonModal = (lesson: StudyLesson) => { setEditingLesson(lesson); setLessonForm(lesson); setShowEditLesson(true); setLessonFormError(null); };
+  const closeEditLessonModal = () => { setShowEditLesson(false); setEditingLesson(null); setLessonForm({}); setLessonFormError(null); };
+  const openDeleteLessonDialog = (lesson: StudyLesson) => { setDeletingLesson(lesson); setShowDeleteLesson(true); setDeleteLessonError(null); };
+  const closeDeleteLessonDialog = () => { setShowDeleteLesson(false); setDeletingLesson(null); setDeleteLessonError(null); };
+  const handleLessonFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setLessonForm(prev => ({ ...prev, [name]: value }));
+  };
+  const handleLessonFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLessonFormLoading(true);
+    setLessonFormError(null);
+    try {
+      let resp;
+      if (editingLesson) {
+        resp = await fetch('/api/bible-study/lessons', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingLesson.id, ...lessonForm }) });
+      } else {
+        resp = await fetch('/api/bible-study/lessons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lessonForm) });
+      }
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to save lesson');
+      toast.success('Lesson saved successfully!');
+      await fetchStudies();
+      closeEditLessonModal();
+    } catch (err: any) {
+      setLessonFormError(err.message || 'Failed to save lesson');
+      toast.error(err.message || 'Failed to save lesson');
+    } finally {
+      setLessonFormLoading(false);
+    }
+  };
+  const handleDeleteLesson = async () => {
+    if (!deletingLesson) return;
+    setDeleteLessonLoading(true);
+    setDeleteLessonError(null);
+    try {
+      const resp = await fetch('/api/bible-study/lessons', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: deletingLesson.id }) });
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to delete lesson');
+      toast.success('Lesson deleted successfully!');
+      await fetchStudies();
+      closeDeleteLessonDialog();
+    } catch (err: any) {
+      setDeleteLessonError(err.message || 'Failed to delete lesson');
+      toast.error(err.message || 'Failed to delete lesson');
+    } finally {
+      setDeleteLessonLoading(false);
+    }
+  };
+
+  // --- CRUD Handlers for Groups ---
+  const openNewGroupModal = () => { setEditingGroup(null); setGroupForm({}); setShowEditGroup(true); setGroupFormError(null); };
+  const openEditGroupModal = (group: StudyGroup) => { setEditingGroup(group); setGroupForm(group); setShowEditGroup(true); setGroupFormError(null); };
+  const closeEditGroupModal = () => { setShowEditGroup(false); setEditingGroup(null); setGroupForm({}); setGroupFormError(null); };
+  const openDeleteGroupDialog = (group: StudyGroup) => { setDeletingGroup(group); setShowDeleteGroup(true); setDeleteGroupError(null); };
+  const closeDeleteGroupDialog = () => { setShowDeleteGroup(false); setDeletingGroup(null); setDeleteGroupError(null); };
+  const handleGroupFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setGroupForm(prev => ({ ...prev, [name]: value }));
+  };
+  const handleGroupFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGroupFormLoading(true);
+    setGroupFormError(null);
+    try {
+      let resp;
+      if (editingGroup) {
+        resp = await fetch('/api/bible-study/groups', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingGroup.id, ...groupForm }) });
+      } else {
+        resp = await fetch('/api/bible-study/groups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(groupForm) });
+      }
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to save group');
+      toast.success('Group saved successfully!');
+      await fetchGroups();
+      closeEditGroupModal();
+    } catch (err: any) {
+      setGroupFormError(err.message || 'Failed to save group');
+      toast.error(err.message || 'Failed to save group');
+    } finally {
+      setGroupFormLoading(false);
+    }
+  };
+  const handleDeleteGroup = async () => {
+    if (!deletingGroup) return;
+    setDeleteGroupLoading(true);
+    setDeleteGroupError(null);
+    try {
+      const resp = await fetch('/api/bible-study/groups', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: deletingGroup.id }) });
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to delete group');
+      toast.success('Group deleted successfully!');
+      await fetchGroups();
+      closeDeleteGroupDialog();
+    } catch (err: any) {
+      setDeleteGroupError(err.message || 'Failed to delete group');
+      toast.error(err.message || 'Failed to delete group');
+    } finally {
+      setDeleteGroupLoading(false);
+    }
+  };
+
+  // --- CRUD Handlers for Discussions ---
+  const openNewDiscussionModal = () => { setEditingDiscussion(null); setDiscussionForm({}); setShowEditDiscussion(true); setDiscussionFormError(null); };
+  const openEditDiscussionModal = (discussion: Discussion) => { setEditingDiscussion(discussion); setDiscussionForm(discussion); setShowEditDiscussion(true); setDiscussionFormError(null); };
+  const closeEditDiscussionModal = () => { setShowEditDiscussion(false); setEditingDiscussion(null); setDiscussionForm({}); setDiscussionFormError(null); };
+  const openDeleteDiscussionDialog = (discussion: Discussion) => { setDeletingDiscussion(discussion); setShowDeleteDiscussion(true); setDeleteDiscussionError(null); };
+  const closeDeleteDiscussionDialog = () => { setShowDeleteDiscussion(false); setDeletingDiscussion(null); setDeleteDiscussionError(null); };
+  const handleDiscussionFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setDiscussionForm(prev => ({ ...prev, [name]: value }));
+  };
+  const handleDiscussionFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDiscussionFormLoading(true);
+    setDiscussionFormError(null);
+    try {
+      let resp;
+      if (editingDiscussion) {
+        resp = await fetch('/api/bible-study/discussions', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingDiscussion.id, ...discussionForm }) });
+      } else {
+        resp = await fetch('/api/bible-study/discussions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(discussionForm) });
+      }
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to save discussion');
+      toast.success('Discussion saved successfully!');
+      await fetchDiscussions();
+      closeEditDiscussionModal();
+    } catch (err: any) {
+      setDiscussionFormError(err.message || 'Failed to save discussion');
+      toast.error(err.message || 'Failed to save discussion');
+    } finally {
+      setDiscussionFormLoading(false);
+    }
+  };
+  const handleDeleteDiscussion = async () => {
+    if (!deletingDiscussion) return;
+    setDeleteDiscussionLoading(true);
+    setDeleteDiscussionError(null);
+    try {
+      const resp = await fetch('/api/bible-study/discussions', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: deletingDiscussion.id }) });
+      if (!resp.ok) throw new Error((await resp.json()).error || 'Failed to delete discussion');
+      toast.success('Discussion deleted successfully!');
+      await fetchDiscussions();
+      closeDeleteDiscussionDialog();
+    } catch (err: any) {
+      setDeleteDiscussionError(err.message || 'Failed to delete discussion');
+      toast.error(err.message || 'Failed to delete discussion');
+    } finally {
+      setDeleteDiscussionLoading(false);
+    }
+  };
+
   const [realtimeDiscussions, setRealtimeDiscussions] = useState<Discussion[]>([])
   const [chatMessages, setChatMessages] = useState<any[]>([])
   const ydocRef = useRef<Y.Doc | null>(null)
@@ -201,7 +445,7 @@ export default function InteractiveBibleStudy() {
   useEffect(() => {
     setIsLoading(true)
     Promise.all([fetchStudies(), fetchGroups(), fetchDiscussions(), fetchProgress()])
-      .catch(() => toast({ title: "Failed to load Bible study data", variant: "destructive" }))
+      .catch(() => toast.error("Failed to load Bible study data"))
       .finally(() => setIsLoading(false))
   }, [])
 
@@ -260,10 +504,10 @@ export default function InteractiveBibleStudy() {
     try {
       const res = await fetch('/api/ai/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) })
       const data = await res.json()
-      toast({ title: 'AI response received!' })
+      toast.success('AI response received!')
       return data.response
     } catch {
-      toast({ title: 'AI request failed', variant: 'destructive' })
+      toast.error('AI request failed')
     } finally {
       setIsLoading(false)
     }
@@ -283,11 +527,11 @@ export default function InteractiveBibleStudy() {
       if (response.ok) {
         const data = await response.json()
         // Handle search results
-        toast({ title: `Found ${data.verses?.length || 0} verses` })
+        toast.success(`Found ${data.verses?.length || 0} verses`)
       }
     } catch (error) {
       console.error("Error searching Bible:", error)
-      toast({ title: "Failed to search Bible verses", variant: "destructive" })
+      toast.error("Failed to search Bible verses")
     } finally {
       setIsLoading(false)
     }
@@ -309,13 +553,13 @@ export default function InteractiveBibleStudy() {
 
       if (response.ok) {
         const studyData = await response.json()
-        toast({ title: "AI study generated successfully!" })
+        toast.success("AI study generated successfully!")
         // Handle the generated study
         return studyData
       }
     } catch (error) {
       console.error("Error generating AI study:", error)
-      toast({ title: "Failed to generate AI study", variant: "destructive" })
+      toast.error("Failed to generate AI study")
     } finally {
       setIsLoading(false)
     }
@@ -327,10 +571,10 @@ export default function InteractiveBibleStudy() {
         plan.id === studyId ? { ...plan, isEnrolled: true, participants: plan.participants + 1 } : plan,
       )
       setStudyPlans(updatedPlans)
-      toast({ title: "Successfully enrolled in study plan!" })
+      toast.success("Successfully enrolled in study plan!")
     } catch (error) {
       console.error("Error enrolling in study:", error)
-      toast({ title: "Failed to enroll in study", variant: "destructive" })
+      toast.error("Failed to enroll in study")
     }
   }
 
@@ -349,11 +593,11 @@ export default function InteractiveBibleStudy() {
           progress: newProgress,
         })
 
-        toast({ title: "Lesson completed! 🎉" })
+        toast.success("Lesson completed! 🎉")
       }
     } catch (error) {
       console.error("Error completing lesson:", error)
-      toast({ title: "Failed to complete lesson", variant: "destructive" })
+      toast.error("Failed to complete lesson")
     }
   }
 
@@ -377,10 +621,10 @@ export default function InteractiveBibleStudy() {
           : group,
       )
       setStudyGroups(updatedGroups)
-      toast({ title: "Successfully joined study group!" })
+      toast.success("Successfully joined study group!")
     } catch (error) {
       console.error("Error joining group:", error)
-      toast({ title: "Failed to join study group", variant: "destructive" })
+      toast.error("Failed to join study group")
     }
   }
 
@@ -400,10 +644,10 @@ export default function InteractiveBibleStudy() {
       }
 
       setDiscussions([newDiscussion, ...discussions])
-      toast({ title: "Discussion added successfully!" })
+      toast.success("Discussion added successfully!")
     } catch (error) {
       console.error("Error adding discussion:", error)
-      toast({ title: "Failed to add discussion", variant: "destructive" })
+      toast.error("Failed to add discussion")
     }
   }
 
@@ -419,6 +663,41 @@ export default function InteractiveBibleStudy() {
     if (studyFilter === "completed") return plan.progress === 100
     return plan.category === studyFilter
   })
+
+  // --- Pagination, Sorting, Filtering Logic ---
+  const sortedFilteredStudies = [...filteredStudyPlans].sort((a, b) => {
+    let aValue = a[studySortField] || '';
+    let bValue = b[studySortField] || '';
+    if (studySortField === 'participants') {
+      aValue = a.participants || 0;
+      bValue = b.participants || 0;
+    }
+    if (studySortOrder === 'asc') return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+    return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+  });
+  const totalStudiesPages = Math.ceil(sortedFilteredStudies.length / studiesPerPage);
+  const paginatedStudies = sortedFilteredStudies.slice((studiesPage - 1) * studiesPerPage, studiesPage * studiesPerPage);
+
+  // --- Pagination, Sorting, Filtering for Groups ---
+  const sortedGroups = [...studyGroups].sort((a, b) => {
+    let aValue = a[groupSortField] || '';
+    let bValue = b[groupSortField] || '';
+    if (groupSortOrder === 'asc') return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+    return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+  });
+  const totalGroupsPages = Math.ceil(sortedGroups.length / groupsPerPage);
+  const paginatedGroups = sortedGroups.slice((groupsPage - 1) * groupsPerPage, groupsPage * groupsPerPage);
+
+  // --- Study Modal Handlers (move above first usage and ensure correct references) ---
+  const openNewStudyModal = () => { setEditingStudy(null); setStudyForm({}); setShowEditStudy(true); setStudyFormError(null); };
+  const openEditStudyModal = (study: StudyPlan) => { setEditingStudy(study); setStudyForm(study); setShowEditStudy(true); setStudyFormError(null); };
+  const closeEditStudyModal = () => { setShowEditStudy(false); setEditingStudy(null); setStudyForm({}); setStudyFormError(null); };
+  const openDeleteStudyDialog = (study: StudyPlan) => { setDeletingStudy(study); setShowDeleteStudy(true); setDeleteStudyError(null); };
+  const closeDeleteStudyDialog = () => { setShowDeleteStudy(false); setDeletingStudy(null); setDeleteStudyError(null); };
+  const handleStudyFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setStudyForm(prev => ({ ...prev, [name]: value }));
+  };
 
   return (
     <div className="space-y-6">
@@ -453,7 +732,7 @@ export default function InteractiveBibleStudy() {
               <Button variant="link" className="w-full mt-2 text-blue-600" onClick={() => setShowNotifSettings(true)}>Notification Settings</Button>
             </PopoverContent>
           </Popover>
-          <Button onClick={() => setShowCreateStudy(true)}>
+          <Button onClick={openNewStudyModal} variant="outline" className="mb-2">
             <Plus className="h-4 w-4 mr-2" />
             Create Study
           </Button>
@@ -539,7 +818,7 @@ export default function InteractiveBibleStudy() {
           <div>
             <h2 className="text-xl font-semibold mb-4">Featured Studies</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredStudyPlans.slice(0, 6).map((study) => (
+              {paginatedStudies.map((study) => (
                 <Card key={study.id} className="hover:shadow-lg transition-shadow">
                   <CardHeader>
                     <div className="flex justify-between items-start">
@@ -596,6 +875,12 @@ export default function InteractiveBibleStudy() {
                       )}
                       <Button variant="outline" size="icon">
                         <Bookmark className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => openEditStudyModal(study)}>
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => openDeleteStudyDialog(study)}>
+                        Delete
                       </Button>
                     </div>
                   </CardContent>
@@ -720,7 +1005,7 @@ export default function InteractiveBibleStudy() {
         {/* Groups Tab */}
         <TabsContent value="groups" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {studyGroups.map((group) => (
+            {paginatedGroups.map((group) => (
               <Card key={group.id}>
                 <CardHeader>
                   <CardTitle className="text-lg">{group.name}</CardTitle>
@@ -759,9 +1044,15 @@ export default function InteractiveBibleStudy() {
                   >
                     {group.members.some((m) => m.id === "current-user") ? "Joined" : "Join Group"}
                   </Button>
+                  <Button size="sm" variant="outline" onClick={() => openEditGroupModal(group)}>Edit</Button>
+                  <Button size="sm" variant="destructive" onClick={() => openDeleteGroupDialog(group)}>Delete</Button>
                 </CardContent>
               </Card>
             ))}
+            <Button onClick={openNewGroupModal} className="w-full">
+              <Plus className="h-4 w-4 mr-2" />
+              Create New Group
+            </Button>
           </div>
         </TabsContent>
 
@@ -814,6 +1105,10 @@ export default function InteractiveBibleStudy() {
               </ScrollArea>
             </CardContent>
           </Card>
+          <Button onClick={openNewDiscussionModal} className="w-full">
+            <Plus className="h-4 w-4 mr-2" />
+            Add New Discussion
+          </Button>
         </TabsContent>
 
         {/* Progress Tab */}
@@ -1142,6 +1437,190 @@ export default function InteractiveBibleStudy() {
           </CardContent>
         </Card>
       )}
+
+      {/* Create/Edit Study Modal */}
+      <Dialog open={showEditStudy} onOpenChange={setShowEditStudy}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingStudy ? 'Edit Study' : 'Create Study'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleStudyFormSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="title">Title</label>
+              <Input name="title" value={studyForm.title || ''} onChange={handleStudyFormChange} required />
+            </div>
+            <div>
+              <label htmlFor="description">Description</label>
+              <Input name="description" value={studyForm.description || ''} onChange={handleStudyFormChange} required />
+            </div>
+            <div>
+              <label htmlFor="duration">Duration</label>
+              <Input name="duration" value={studyForm.duration || ''} onChange={handleStudyFormChange} />
+            </div>
+            <div>
+              <label htmlFor="difficulty">Difficulty</label>
+              <select name="difficulty" value={studyForm.difficulty || 'beginner'} onChange={handleStudyFormChange} className="w-full border rounded px-2 py-1">
+                <option value="beginner">Beginner</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="category">Category</label>
+              <Input name="category" value={studyForm.category || ''} onChange={handleStudyFormChange} />
+            </div>
+            {studyFormError && <div className="text-red-600 text-sm">{studyFormError}</div>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeEditStudyModal} disabled={studyFormLoading}>Cancel</Button>
+              <Button type="submit" disabled={studyFormLoading}>{studyFormLoading ? 'Saving...' : 'Save'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Study Delete Confirmation Dialog */}
+      <Dialog open={showDeleteStudy} onOpenChange={setShowDeleteStudy}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Study</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete this study?</div>
+          {deleteStudyError && <div className="text-red-600 text-sm">{deleteStudyError}</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeDeleteStudyDialog} disabled={deleteStudyLoading}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteStudy} disabled={deleteStudyLoading}>{deleteStudyLoading ? 'Deleting...' : 'Delete'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create/Edit Lesson Modal */}
+      <Dialog open={showEditLesson} onOpenChange={setShowEditLesson}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingLesson ? 'Edit Lesson' : 'Create New Lesson'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleLessonFormSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="lessonTitle">Title</label>
+              <Input name="title" value={lessonForm.title || ''} onChange={handleLessonFormChange} required />
+            </div>
+            <div>
+              <label htmlFor="lessonDescription">Description</label>
+              <Input name="description" value={lessonForm.description || ''} onChange={handleLessonFormChange} />
+            </div>
+            <div>
+              <label htmlFor="lessonDuration">Duration (minutes)</label>
+              <Input name="duration" type="number" value={lessonForm.duration || ''} onChange={handleLessonFormChange} />
+            </div>
+            {lessonFormError && <div className="text-red-600 text-sm">{lessonFormError}</div>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeEditLessonModal} disabled={lessonFormLoading}>Cancel</Button>
+              <Button type="submit" disabled={lessonFormLoading}>{lessonFormLoading ? 'Saving...' : 'Save Lesson'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lesson Delete Confirmation Dialog */}
+      <Dialog open={showDeleteLesson} onOpenChange={setShowDeleteLesson}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Lesson</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete this lesson?</div>
+          {deleteLessonError && <div className="text-red-600 text-sm">{deleteLessonError}</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeDeleteLessonDialog} disabled={deleteLessonLoading}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteLesson} disabled={deleteLessonLoading}>{deleteLessonLoading ? 'Deleting...' : 'Delete'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create/Edit Group Modal */}
+      <Dialog open={showEditGroup} onOpenChange={setShowEditGroup}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingGroup ? 'Edit Group' : 'Create New Group'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleGroupFormSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="groupName">Group Name</label>
+              <Input name="name" value={groupForm.name || ''} onChange={handleGroupFormChange} required />
+            </div>
+            <div>
+              <label htmlFor="groupDescription">Description</label>
+              <Input name="description" value={groupForm.description || ''} onChange={handleGroupFormChange} />
+            </div>
+            <div>
+              <label htmlFor="groupMeetingTime">Meeting Time</label>
+              <Input name="meetingTime" value={groupForm.meetingTime || ''} onChange={handleGroupFormChange} />
+            </div>
+            <div>
+              <label htmlFor="groupIsPrivate">Private Group</label>
+              <select name="isPrivate" value={groupForm.isPrivate ? 'true' : 'false'} onChange={handleGroupFormChange} className="w-full border rounded px-2 py-1">
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+            {groupFormError && <div className="text-red-600 text-sm">{groupFormError}</div>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeEditGroupModal} disabled={groupFormLoading}>Cancel</Button>
+              <Button type="submit" disabled={groupFormLoading}>{groupFormLoading ? 'Saving...' : 'Save Group'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Group Delete Confirmation Dialog */}
+      <Dialog open={showDeleteGroup} onOpenChange={setShowDeleteGroup}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Group</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete this group?</div>
+          {deleteGroupError && <div className="text-red-600 text-sm">{deleteGroupError}</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeDeleteGroupDialog} disabled={deleteGroupLoading}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteGroup} disabled={deleteGroupLoading}>{deleteGroupLoading ? 'Deleting...' : 'Delete'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create/Edit Discussion Modal */}
+      <Dialog open={showEditDiscussion} onOpenChange={setShowEditDiscussion}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingDiscussion ? 'Edit Discussion' : 'Create New Discussion'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleDiscussionFormSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="discussionContent">Content</label>
+              <textarea name="content" value={discussionForm.content || ''} onChange={handleDiscussionFormChange} rows={4} className="w-full border rounded p-2" />
+            </div>
+            {discussionFormError && <div className="text-red-600 text-sm">{discussionFormError}</div>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeEditDiscussionModal} disabled={discussionFormLoading}>Cancel</Button>
+              <Button type="submit" disabled={discussionFormLoading}>{discussionFormLoading ? 'Saving...' : 'Save Discussion'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Discussion Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDiscussion} onOpenChange={setShowDeleteDiscussion}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Discussion</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete this discussion?</div>
+          {deleteDiscussionError && <div className="text-red-600 text-sm">{deleteDiscussionError}</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeDeleteDiscussionDialog} disabled={deleteDiscussionLoading}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteDiscussion} disabled={deleteDiscussionLoading}>{deleteDiscussionLoading ? 'Deleting...' : 'Delete'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   )
 }

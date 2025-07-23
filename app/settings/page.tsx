@@ -7,6 +7,9 @@ import { ChevronDown, ChevronRight, Users, Calendar, DollarSign, Building2, Radi
 import { useState } from 'react';
 import { FeatureProvider } from '../components/_shared/feature-context';
 
+export const themeColor = "#000000";
+export const viewport = "width=device-width, initial-scale=1, maximum-scale=1";
+
 const featureGroups = [
   {
     group: 'Core Features',

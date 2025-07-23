@@ -1,4 +1,4 @@
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { supabase } from '@/lib/supabase-client';
 import { IVersionControl, Version, VersionDiff } from "./types/version-control"
 import { diffLines, diffJson, diffWords } from "diff"
 
@@ -6,7 +6,7 @@ import { diffLines, diffJson, diffWords } from "diff"
  * Service for managing version control functionality
  */
 export class VersionControlService<T = any> implements IVersionControl<T> {
-  private supabase = createClientComponentClient()
+  private supabase = supabase
   private resourceType: string
   
   /**
@@ -285,7 +285,7 @@ export class VersionControlService<T = any> implements IVersionControl<T> {
     // Remove the tag if it exists
     const currentTags = currentVersion.tags || []
     if (currentTags.includes(tag)) {
-      const updatedTags = currentTags.filter(t => t !== tag)
+      const updatedTags = currentTags.filter((t: any) => t !== tag)
       
       const { data, error } = await this.supabase
         .from("resource_versions")

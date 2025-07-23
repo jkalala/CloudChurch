@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { 
   Card, 
   CardContent, 
@@ -48,120 +48,193 @@ import {
   TrendingDown
 } from 'lucide-react';
 import { format, parseISO, subDays } from 'date-fns';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 
-// Sample transaction data
-const transactions = [
-  {
-    id: '1',
-    date: '2025-07-18',
-    description: 'Sunday Offering',
-    category: 'Tithes',
-    amount: 3250.00,
-    type: 'income',
-    method: 'cash',
-    status: 'completed'
-  },
-  {
-    id: '2',
-    date: '2025-07-18',
-    description: 'Online Donation',
-    category: 'Tithes',
-    amount: 1750.50,
-    type: 'income',
-    method: 'online',
-    status: 'completed'
-  },
-  {
-    id: '3',
-    date: '2025-07-17',
-    description: 'Utility Bill Payment',
-    category: 'Utilities',
-    amount: 425.75,
-    type: 'expense',
-    method: 'check',
-    status: 'completed'
-  },
-  {
-    id: '4',
-    date: '2025-07-16',
-    description: 'Youth Camp Registrations',
-    category: 'Events',
-    amount: 1200.00,
-    type: 'income',
-    method: 'online',
-    status: 'completed'
-  },
-  {
-    id: '5',
-    date: '2025-07-15',
-    description: 'Office Supplies',
-    category: 'Administration',
-    amount: 187.45,
-    type: 'expense',
-    method: 'card',
-    status: 'completed'
-  },
-  {
-    id: '6',
-    date: '2025-07-14',
-    description: 'Staff Salary',
-    category: 'Payroll',
-    amount: 4500.00,
-    type: 'expense',
-    method: 'transfer',
-    status: 'completed'
-  }
-];
+export const themeColor = "#000000";
+export const viewport = "width=device-width, initial-scale=1, maximum-scale=1";
 
-// Sample budget data
-const budgets = [
-  {
-    id: '1',
-    category: 'Facilities',
-    allocated: 5000.00,
-    spent: 3250.75,
-    remaining: 1749.25,
-    period: 'July 2025'
-  },
-  {
-    id: '2',
-    category: 'Ministries',
-    allocated: 3000.00,
-    spent: 1875.50,
-    remaining: 1124.50,
-    period: 'July 2025'
-  },
-  {
-    id: '3',
-    category: 'Missions',
-    allocated: 2500.00,
-    spent: 1000.00,
-    remaining: 1500.00,
-    period: 'July 2025'
-  },
-  {
-    id: '4',
-    category: 'Administration',
-    allocated: 1500.00,
-    spent: 875.25,
-    remaining: 624.75,
-    period: 'July 2025'
-  },
-  {
-    id: '5',
-    category: 'Events',
-    allocated: 2000.00,
-    spent: 1250.00,
-    remaining: 750.00,
-    period: 'July 2025'
-  }
-];
+// Remove sample transaction and budget data
+// const transactions = [
+//   {
+//     id: '1',
+//     date: '2025-07-18',
+//     description: 'Sunday Offering',
+//     category: 'Tithes',
+//     amount: 3250.00,
+//     type: 'income',
+//     method: 'cash',
+//     status: 'completed'
+//   },
+//   {
+//     id: '2',
+//     date: '2025-07-18',
+//     description: 'Online Donation',
+//     category: 'Tithes',
+//     amount: 1750.50,
+//     type: 'income',
+//     method: 'online',
+//     status: 'completed'
+//   },
+//   {
+//     id: '3',
+//     date: '2025-07-17',
+//     description: 'Utility Bill Payment',
+//     category: 'Utilities',
+//     amount: 425.75,
+//     type: 'expense',
+//     method: 'check',
+//     status: 'completed'
+//   },
+//   {
+//     id: '4',
+//     date: '2025-07-16',
+//     description: 'Youth Camp Registrations',
+//     category: 'Events',
+//     amount: 1200.00,
+//     type: 'income',
+//     method: 'online',
+//     status: 'completed'
+//   },
+//   {
+//     id: '5',
+//     date: '2025-07-15',
+//     description: 'Office Supplies',
+//     category: 'Administration',
+//     amount: 187.45,
+//     type: 'expense',
+//     method: 'card',
+//     status: 'completed'
+//   },
+//   {
+//     id: '6',
+//     date: '2025-07-14',
+//     description: 'Staff Salary',
+//     category: 'Payroll',
+//     amount: 4500.00,
+//     type: 'expense',
+//     method: 'transfer',
+//     status: 'completed'
+//   }
+// ];
+
+// const budgets = [
+//   {
+//     id: '1',
+//     category: 'Facilities',
+//     allocated: 5000.00,
+//     spent: 3250.75,
+//     remaining: 1749.25,
+//     period: 'July 2025'
+//   },
+//   {
+//     id: '2',
+//     category: 'Ministries',
+//     allocated: 3000.00,
+//     spent: 1875.50,
+//     remaining: 1124.50,
+//     period: 'July 2025'
+//   },
+//   {
+//     id: '3',
+//     category: 'Missions',
+//     allocated: 2500.00,
+//     spent: 1000.00,
+//     remaining: 1500.00,
+//     period: 'July 2025'
+//   },
+//   {
+//     id: '4',
+//     category: 'Administration',
+//     allocated: 1500.00,
+//     spent: 875.25,
+//     remaining: 624.75,
+//     period: 'July 2025'
+//   },
+//   {
+//     id: '5',
+//     category: 'Events',
+//     allocated: 2000.00,
+//     spent: 1250.00,
+//     remaining: 750.00,
+//     period: 'July 2025'
+//   }
+// ];
+
+// Define types for transactions and budgets
+interface Transaction {
+  id: string;
+  date: string;
+  description: string;
+  category: string;
+  amount: number;
+  type: 'income' | 'expense';
+  method: string;
+  status?: string;
+}
+
+interface Budget {
+  id: string;
+  category: string;
+  allocated: number;
+  spent: number;
+  remaining: number;
+  period: string;
+}
 
 export default function FinancesPage() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [dateRange, setDateRange] = useState<'week' | 'month' | 'quarter' | 'year'>('month');
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [formState, setFormState] = useState<Partial<Transaction>>({});
+  const [formLoading, setFormLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   
+  // Budget modal and delete dialog state
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
+  const [budgetFormState, setBudgetFormState] = useState<Partial<Budget>>({});
+  const [budgetFormLoading, setBudgetFormLoading] = useState(false);
+  const [budgetFormError, setBudgetFormError] = useState<string | null>(null);
+  const [showBudgetDeleteDialog, setShowBudgetDeleteDialog] = useState(false);
+  const [deletingBudget, setDeletingBudget] = useState<Budget | null>(null);
+  const [budgetDeleteLoading, setBudgetDeleteLoading] = useState(false);
+  const [budgetDeleteError, setBudgetDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+      try {
+        // Fetch transactions and summary
+        const res = await fetch('/api/financial');
+        const data = await res.json();
+        setTransactions((data.transactions || []) as Transaction[]);
+        // Fetch budgets
+        const budgetsRes = await fetch('/api/financial?budgets=1');
+        const budgetsData = await budgetsRes.json();
+        setBudgets((budgetsData.budgets || []) as Budget[]);
+      } catch (err) {
+        // Optionally handle error
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return <div className="flex justify-center items-center h-96">Loading...</div>;
+  }
+
   // Calculate financial summary
   const totalIncome = transactions
     .filter(t => t.type === 'income')
@@ -225,6 +298,182 @@ export default function FinancesPage() {
     return Math.round((spent / allocated) * 100);
   };
 
+  // Handlers for opening/closing modal
+  const openNewTransactionModal = () => {
+    setEditingTransaction(null);
+    setFormState({});
+    setShowTransactionModal(true);
+    setFormError(null);
+  };
+  const openEditTransactionModal = (transaction: Transaction) => {
+    setEditingTransaction(transaction);
+    setFormState(transaction);
+    setShowTransactionModal(true);
+    setFormError(null);
+  };
+  const closeTransactionModal = () => {
+    setShowTransactionModal(false);
+    setEditingTransaction(null);
+    setFormState({});
+    setFormError(null);
+  };
+
+  // Handle form input changes
+  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormState(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Handle form submit (create or update)
+  const handleTransactionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormLoading(true);
+    setFormError(null);
+    try {
+      const method = editingTransaction ? 'PUT' : 'POST';
+      const body = editingTransaction ? { ...formState, id: editingTransaction.id } : formState;
+      const res = await fetch('/api/financial', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to save transaction');
+      }
+      // Refresh transactions
+      const data = await fetch('/api/financial').then(r => r.json());
+      setTransactions((data.transactions || []) as Transaction[]);
+      closeTransactionModal();
+    } catch (err: any) {
+      setFormError(err.message || 'Error');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  // Delete handlers
+  const openDeleteDialog = (transaction: Transaction) => {
+    setDeletingTransaction(transaction);
+    setShowDeleteDialog(true);
+    setDeleteError(null);
+  };
+  const closeDeleteDialog = () => {
+    setShowDeleteDialog(false);
+    setDeletingTransaction(null);
+    setDeleteError(null);
+  };
+  const handleDeleteTransaction = async () => {
+    if (!deletingTransaction) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch('/api/financial', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: deletingTransaction.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to delete transaction');
+      }
+      // Refresh transactions
+      const data = await fetch('/api/financial').then(r => r.json());
+      setTransactions((data.transactions || []) as Transaction[]);
+      closeDeleteDialog();
+    } catch (err: any) {
+      setDeleteError(err.message || 'Error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  // Budget modal handlers
+  const openNewBudgetModal = () => {
+    setEditingBudget(null);
+    setBudgetFormState({});
+    setShowBudgetModal(true);
+    setBudgetFormError(null);
+  };
+  const openEditBudgetModal = (budget: Budget) => {
+    setEditingBudget(budget);
+    setBudgetFormState(budget);
+    setShowBudgetModal(true);
+    setBudgetFormError(null);
+  };
+  const closeBudgetModal = () => {
+    setShowBudgetModal(false);
+    setEditingBudget(null);
+    setBudgetFormState({});
+    setBudgetFormError(null);
+  };
+  const handleBudgetFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setBudgetFormState(prev => ({ ...prev, [name]: value }));
+  };
+  const handleBudgetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBudgetFormLoading(true);
+    setBudgetFormError(null);
+    try {
+      const method = editingBudget ? 'PUT' : 'POST';
+      const body = editingBudget ? { ...budgetFormState, id: editingBudget.id } : budgetFormState;
+      const res = await fetch('/api/financial?budgets=1', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to save budget');
+      }
+      // Refresh budgets
+      const data = await fetch('/api/financial?budgets=1').then(r => r.json());
+      setBudgets((data.budgets || []) as Budget[]);
+      closeBudgetModal();
+    } catch (err: any) {
+      setBudgetFormError(err.message || 'Error');
+    } finally {
+      setBudgetFormLoading(false);
+    }
+  };
+
+  // Budget delete handlers
+  const openBudgetDeleteDialog = (budget: Budget) => {
+    setDeletingBudget(budget);
+    setShowBudgetDeleteDialog(true);
+    setBudgetDeleteError(null);
+  };
+  const closeBudgetDeleteDialog = () => {
+    setShowBudgetDeleteDialog(false);
+    setDeletingBudget(null);
+    setBudgetDeleteError(null);
+  };
+  const handleDeleteBudget = async () => {
+    if (!deletingBudget) return;
+    setBudgetDeleteLoading(true);
+    setBudgetDeleteError(null);
+    try {
+      const res = await fetch('/api/financial?budgets=1', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: deletingBudget.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to delete budget');
+      }
+      // Refresh budgets
+      const data = await fetch('/api/financial?budgets=1').then(r => r.json());
+      setBudgets((data.budgets || []) as Budget[]);
+      closeBudgetDeleteDialog();
+    } catch (err: any) {
+      setBudgetDeleteError(err.message || 'Error');
+    } finally {
+      setBudgetDeleteLoading(false);
+    }
+  };
+
   return (
     <div className="container py-6 space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -236,7 +485,7 @@ export default function FinancesPage() {
         </div>
         
         <div className="flex items-center space-x-2">
-          <Button>
+          <Button onClick={openNewTransactionModal}>
             <Plus className="mr-2 h-4 w-4" />
             New Transaction
           </Button>
@@ -410,11 +659,11 @@ export default function FinancesPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditTransactionModal(transaction)}>Edit Transaction</DropdownMenuItem>
                             <DropdownMenuItem>View Details</DropdownMenuItem>
-                            <DropdownMenuItem>Edit Transaction</DropdownMenuItem>
                             <DropdownMenuItem>Print Receipt</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-red-600">Delete Transaction</DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600" onClick={() => openDeleteDialog(transaction)}>Delete Transaction</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -439,13 +688,13 @@ export default function FinancesPage() {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-medium">Budget Management</h2>
             <div className="flex space-x-2">
+              <Button onClick={openNewBudgetModal}>
+                <Plus className="mr-2 h-4 w-4" />
+                New Budget
+              </Button>
               <Button variant="outline">
                 <Download className="mr-2 h-4 w-4" />
                 Export
-              </Button>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Budget
               </Button>
             </div>
           </div>
@@ -492,9 +741,10 @@ export default function FinancesPage() {
                   </div>
                 </CardContent>
                 <CardFooter className="pt-2">
-                  <Button variant="outline" size="sm" className="w-full">
-                    View Transactions
-                  </Button>
+                  <div className="flex space-x-2">
+                    <Button variant="outline" size="sm" onClick={() => openEditBudgetModal(budget)}>Edit</Button>
+                    <Button variant="destructive" size="sm" onClick={() => openBudgetDeleteDialog(budget)}>Delete</Button>
+                  </div>
                 </CardFooter>
               </Card>
             ))}
@@ -760,6 +1010,119 @@ export default function FinancesPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Transaction Modal */}
+      <Dialog open={showTransactionModal} onOpenChange={setShowTransactionModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingTransaction ? 'Edit Transaction' : 'New Transaction'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleTransactionSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="date">Date</Label>
+              <Input type="date" name="date" value={formState.date || ''} onChange={handleFormChange} required />
+            </div>
+            <div>
+              <Label htmlFor="description">Description</Label>
+              <Input name="description" value={formState.description || ''} onChange={handleFormChange} required />
+            </div>
+            <div>
+              <Label htmlFor="category">Category</Label>
+              <Input name="category" value={formState.category || ''} onChange={handleFormChange} required />
+            </div>
+            <div>
+              <Label htmlFor="amount">Amount</Label>
+              <Input type="number" name="amount" value={formState.amount || ''} onChange={handleFormChange} required min="0" step="0.01" />
+            </div>
+            <div>
+              <Label htmlFor="type">Type</Label>
+              <select name="type" value={formState.type || ''} onChange={handleFormChange} required className="w-full border rounded p-2">
+                <option value="">Select type</option>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="method">Method</Label>
+              <Input name="method" value={formState.method || ''} onChange={handleFormChange} required />
+            </div>
+            {formError && <div className="text-red-600 text-sm">{formError}</div>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeTransactionModal} disabled={formLoading}>Cancel</Button>
+              <Button type="submit" disabled={formLoading}>{formLoading ? 'Saving...' : 'Save'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Transaction</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete this transaction?</div>
+          {deleteError && <div className="text-red-600 text-sm">{deleteError}</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeDeleteDialog} disabled={deleteLoading}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteTransaction} disabled={deleteLoading}>
+              {deleteLoading ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Budget Modal */}
+      <Dialog open={showBudgetModal} onOpenChange={setShowBudgetModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingBudget ? 'Edit Budget' : 'New Budget'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleBudgetSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="category">Category</Label>
+              <Input name="category" value={budgetFormState.category || ''} onChange={handleBudgetFormChange} required />
+            </div>
+            <div>
+              <Label htmlFor="allocated">Allocated</Label>
+              <Input type="number" name="allocated" value={budgetFormState.allocated || ''} onChange={handleBudgetFormChange} required min="0" step="0.01" />
+            </div>
+            <div>
+              <Label htmlFor="spent">Spent</Label>
+              <Input type="number" name="spent" value={budgetFormState.spent || ''} onChange={handleBudgetFormChange} required min="0" step="0.01" />
+            </div>
+            <div>
+              <Label htmlFor="remaining">Remaining</Label>
+              <Input type="number" name="remaining" value={budgetFormState.remaining || ''} onChange={handleBudgetFormChange} required min="0" step="0.01" />
+            </div>
+            <div>
+              <Label htmlFor="period">Period</Label>
+              <Input name="period" value={budgetFormState.period || ''} onChange={handleBudgetFormChange} required />
+            </div>
+            {budgetFormError && <div className="text-red-600 text-sm">{budgetFormError}</div>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeBudgetModal} disabled={budgetFormLoading}>Cancel</Button>
+              <Button type="submit" disabled={budgetFormLoading}>{budgetFormLoading ? 'Saving...' : 'Save'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {/* Budget Delete Confirmation Dialog */}
+      <Dialog open={showBudgetDeleteDialog} onOpenChange={setShowBudgetDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Budget</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete this budget?</div>
+          {budgetDeleteError && <div className="text-red-600 text-sm">{budgetDeleteError}</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeBudgetDeleteDialog} disabled={budgetDeleteLoading}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteBudget} disabled={budgetDeleteLoading}>
+              {budgetDeleteLoading ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { createClientComponentClient } from "./supabase-client"
+import { supabase } from '@/lib/supabase-client';
 import type { Database } from "./database-types"
 import { offlineStorage } from "@/lib/offline-storage"
 
@@ -152,7 +152,7 @@ export function getDb() {
 /* ------------------------------------------------------------------ */
 class DatabaseService {
   // Singleton Supabase client (component-safe)
-  private static supabase = createClientComponentClient<Database>()
+  private static supabase = supabase
 
   static async logMemberAudit(memberId: string, action: string, details: any, userId: string = 'system', userEmail: string = 'system') {
     await this.supabase.from('member_audit_log').insert({

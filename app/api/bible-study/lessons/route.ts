@@ -1,19 +1,33 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase-admin"
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase-admin";
+
+const supabase = createAdminClient();
 
 export async function GET(request: NextRequest) {
-  // List all lessons or fetch by id
-  return NextResponse.json({ lessons: [] })
+  const { data, error } = await supabase.from("bible_study_lessons").select("*");
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ lessons: data });
 }
+
 export async function POST(request: NextRequest) {
-  // Create a new lesson
-  return NextResponse.json({ success: true, lesson: {} })
+  const body = await request.json();
+  const { data, error } = await supabase.from("bible_study_lessons").insert(body).select().single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true, lesson: data });
 }
+
 export async function PATCH(request: NextRequest) {
-  // Update lesson, mark complete
-  return NextResponse.json({ success: true })
+  const body = await request.json();
+  const { id, ...updates } = body;
+  const { data, error } = await supabase.from("bible_study_lessons").update(updates).eq("id", id).select().single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true, lesson: data });
 }
+
 export async function DELETE(request: NextRequest) {
-  // Delete a lesson
-  return NextResponse.json({ success: true })
+  const body = await request.json();
+  const { id } = body;
+  const { error } = await supabase.from("bible_study_lessons").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true });
 } 

@@ -11,7 +11,7 @@ import {
   CollaborationUser,
   CollaborationVersion
 } from '../lib/types/collaboration'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from '@/lib/supabase-client';
 
 /**
  * Hook for collaborative document editing with Y.js
@@ -26,7 +26,6 @@ export function useCollaborativeEditor(options: CollaborationOptions) {
     onError,
   } = options
   
-  const supabase = createClientComponentClient()
   const collaborationService = useRef(new CollaborationService())
   const ydocRef = useRef<Y.Doc | null>(null)
   const providerRef = useRef<any | null>(null)

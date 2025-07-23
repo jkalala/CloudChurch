@@ -22,6 +22,9 @@ import {
   ChevronRight
 } from 'lucide-react';
 
+export const themeColor = "#000000";
+export const viewport = "width=device-width, initial-scale=1, maximum-scale=1";
+
 export default function MobileExperiencePage() {
   const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState('touch');

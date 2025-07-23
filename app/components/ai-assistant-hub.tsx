@@ -25,57 +25,133 @@ import AIWorshipPlannerComponent from "./ai-worship-planner"
 import AISermonAssistantComponent from "./ai-sermon-assistant"
 import { useTranslation } from "@/lib/i18n"
 import { useAuth } from "@/components/auth-provider"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 
 export default function AIAssistantHub() {
   const [activeTab, setActiveTab] = useState("chat")
   const { language } = useAuth()
   const { t } = useTranslation(language)
 
+  // Add state for feature modal
+  const [selectedFeature, setSelectedFeature] = useState<null | { title: string, description: string, extended?: string, icon: JSX.Element, example?: string, benefits?: string[], tryLink?: string }>(null)
+
   const features = [
     {
       icon: <MessageSquare className="h-5 w-5" />,
       title: t("aiAssistant.features.naturalLanguageQueries"),
       description: t("aiAssistant.features.naturalLanguageQueriesDesc"),
+      extended: t("aiAssistant.features.naturalLanguageQueriesExtended") || "Ask questions in plain English and get instant answers about your church data, events, and more.",
+      example: t("aiAssistant.features.naturalLanguageQueriesExample") || "Example: 'How many members joined last month?'",
+      benefits: [
+        t("aiAssistant.features.naturalLanguageQueriesBenefit1") || "No technical skills required.",
+        t("aiAssistant.features.naturalLanguageQueriesBenefit2") || "Instant answers from your real data.",
+        t("aiAssistant.features.naturalLanguageQueriesBenefit3") || "Works across all church modules.",
+      ],
+      tryLink: "#chat"
     },
     {
       icon: <BarChart3 className="h-5 w-5" />,
       title: t("aiAssistant.features.predictiveAnalytics"),
       description: t("aiAssistant.features.predictiveAnalyticsDesc"),
+      extended: t("aiAssistant.features.predictiveAnalyticsExtended") || "See trends and forecasts for attendance, giving, and growth based on your real data.",
+      example: t("aiAssistant.features.predictiveAnalyticsExample") || "Example: 'Show me attendance trends for the past year.'",
+      benefits: [
+        t("aiAssistant.features.predictiveAnalyticsBenefit1") || "Visualize growth and giving.",
+        t("aiAssistant.features.predictiveAnalyticsBenefit2") || "Spot patterns and plan ahead.",
+        t("aiAssistant.features.predictiveAnalyticsBenefit3") || "Data-driven decision making.",
+      ],
+      tryLink: "#insights"
     },
     {
       icon: <Lightbulb className="h-5 w-5" />,
       title: t("aiAssistant.features.smartRecommendations"),
       description: t("aiAssistant.features.smartRecommendationsDesc"),
+      extended: t("aiAssistant.features.smartRecommendationsExtended") || "Get actionable suggestions for events, outreach, and member engagement.",
+      example: t("aiAssistant.features.smartRecommendationsExample") || "Example: 'Suggest an outreach event for next weekend.'",
+      benefits: [
+        t("aiAssistant.features.smartRecommendationsBenefit1") || "Data-driven insights.",
+        t("aiAssistant.features.smartRecommendationsBenefit2") || "Actionable suggestions.",
+        t("aiAssistant.features.smartRecommendationsBenefit3") || "Optimized for your church's needs.",
+      ],
+      tryLink: "#chat"
     },
     {
       icon: <Mic className="h-5 w-5" />,
       title: t("aiAssistant.features.voiceCommands"),
       description: t("aiAssistant.features.voiceCommandsDesc"),
+      extended: t("aiAssistant.features.voiceCommandsExtended") || "Control the assistant with your voice for hands-free operation.",
+      example: t("aiAssistant.features.voiceCommandsExample") || "Example: 'Hey, assistant, show me the attendance report.'",
+      benefits: [
+        t("aiAssistant.features.voiceCommandsBenefit1") || "Hands-free operation.",
+        t("aiAssistant.features.voiceCommandsBenefit2") || "Increased accessibility.",
+        t("aiAssistant.features.voiceCommandsBenefit3") || "More efficient data access.",
+      ],
+      tryLink: "#chat"
     },
     {
       icon: <Mail className="h-5 w-5" />,
       title: t("aiAssistant.features.aiEmailGeneration"),
       description: t("aiAssistant.features.aiEmailGenerationDesc"),
+      extended: t("aiAssistant.features.aiEmailGenerationExtended") || "Draft personalized emails for follow-ups, invitations, and more in seconds.",
+      example: t("aiAssistant.features.aiEmailGenerationExample") || "Example: 'Draft an email for the new member welcome.'",
+      benefits: [
+        t("aiAssistant.features.aiEmailGenerationBenefit1") || "Time-saving.",
+        t("aiAssistant.features.aiEmailGenerationBenefit2") || "Personalized content.",
+        t("aiAssistant.features.aiEmailGenerationBenefit3") || "Improved engagement.",
+      ],
+      tryLink: "#email"
     },
     {
       icon: <Music className="h-5 w-5" />,
       title: t("aiAssistant.features.worshipPlanning"),
       description: t("aiAssistant.features.worshipPlanningDesc"),
+      extended: t("aiAssistant.features.worshipPlanningExtended") || "Plan worship sets with AI-powered song suggestions and setlist optimization.",
+      example: t("aiAssistant.features.worshipPlanningExample") || "Example: 'Suggest a setlist for Sunday morning.'",
+      benefits: [
+        t("aiAssistant.features.worshipPlanningBenefit1") || "Faster setlist creation.",
+        t("aiAssistant.features.worshipPlanningBenefit2") || "Song suggestions tailored to your theme.",
+        t("aiAssistant.features.worshipPlanningBenefit3") || "Optimized key and flow.",
+      ],
+      tryLink: "#worship"
     },
     {
       icon: <BookOpen className="h-5 w-5" />,
       title: t("aiAssistant.features.sermonAssistant"),
       description: t("aiAssistant.features.sermonAssistantDesc"),
+      extended: t("aiAssistant.features.sermonAssistantExtended") || "Get help with sermon outlines, illustrations, and scripture references.",
+      example: t("aiAssistant.features.sermonAssistantExample") || "Example: 'Help me with a sermon outline on forgiveness.'",
+      benefits: [
+        t("aiAssistant.features.sermonAssistantBenefit1") || "Quick sermon preparation.",
+        t("aiAssistant.features.sermonAssistantBenefit2") || "Better scriptural accuracy.",
+        t("aiAssistant.features.sermonAssistantBenefit3") || "More engaging content.",
+      ],
+      tryLink: "#sermon"
     },
     {
       icon: <Users className="h-5 w-5" />,
       title: t("aiAssistant.features.memberInsights"),
       description: t("aiAssistant.features.memberInsightsDesc"),
+      extended: t("aiAssistant.features.memberInsightsExtended") || "See engagement, attendance, and care needs for your members.",
+      example: t("aiAssistant.features.memberInsightsExample") || "Example: 'Analyze member engagement trends.'",
+      benefits: [
+        t("aiAssistant.features.memberInsightsBenefit1") || "Better member care.",
+        t("aiAssistant.features.memberInsightsBenefit2") || "More targeted outreach.",
+        t("aiAssistant.features.memberInsightsBenefit3") || "Improved retention.",
+      ],
+      tryLink: "#insights"
     },
     {
       icon: <TrendingUp className="h-5 w-5" />,
       title: t("aiAssistant.features.growthAnalysis"),
       description: t("aiAssistant.features.growthAnalysisDesc"),
+      extended: t("aiAssistant.features.growthAnalysisExtended") || "Analyze growth patterns and discover opportunities for outreach.",
+      example: t("aiAssistant.features.growthAnalysisExample") || "Example: 'Analyze our church's growth patterns.'",
+      benefits: [
+        t("aiAssistant.features.growthAnalysisBenefit1") || "Identify growth opportunities.",
+        t("aiAssistant.features.growthAnalysisBenefit2") || "Better strategic planning.",
+        t("aiAssistant.features.growthAnalysisBenefit3") || "Data-driven decision making.",
+      ],
+      tryLink: "#insights"
     },
   ]
 
@@ -109,16 +185,57 @@ export default function AIAssistantHub() {
           {features.map((feature, index) => (
             <Card
               key={index}
-              className="border-0 bg-gradient-to-br from-gray-50 to-gray-100 hover:shadow-md transition-shadow"
+              className="border-0 bg-gradient-to-br from-gray-50 to-gray-100 hover:shadow-md transition-shadow cursor-pointer"
+              onClick={e => { console.log('Card clicked:', feature.title); setSelectedFeature(feature); }}
+              tabIndex={0}
+              role="button"
+              aria-label={`Learn more about ${feature.title}`}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setSelectedFeature(feature) }}
             >
-              <CardContent className="p-4 text-center">
+              <CardContent className="p-4 text-center" style={{ pointerEvents: 'auto' }}>
                 <div className="p-3 rounded-lg bg-white inline-flex mb-3">{feature.icon}</div>
                 <h3 className="font-semibold text-sm mb-1">{feature.title}</h3>
                 <p className="text-xs text-gray-600">{feature.description}</p>
+                <span className="text-xs text-green-700 font-bold block mt-2">[DEBUG: Clickable]</span>
               </CardContent>
             </Card>
           ))}
         </div>
+
+      {/* Feature Detail Modal */}
+      <Dialog open={!!selectedFeature} onOpenChange={() => setSelectedFeature(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedFeature?.icon}
+              {selectedFeature?.title}
+            </DialogTitle>
+            <DialogDescription>{selectedFeature?.description}</DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <p className="text-sm text-gray-700 whitespace-pre-line">{selectedFeature?.extended}</p>
+            {selectedFeature?.example && (
+              <div className="bg-gray-50 border-l-4 border-blue-400 p-3 rounded">
+                <span className="block text-xs font-semibold text-blue-700 mb-1">Example Use Case:</span>
+                <span className="text-sm text-gray-800">{selectedFeature.example}</span>
+              </div>
+            )}
+            {selectedFeature?.benefits && (
+              <div>
+                <span className="block text-xs font-semibold text-green-700 mb-1">Key Benefits:</span>
+                <ul className="list-disc list-inside text-sm text-gray-800 space-y-1">
+                  {selectedFeature.benefits.map((benefit, idx) => (
+                    <li key={idx}>{benefit}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {selectedFeature?.tryLink && (
+              <a href={selectedFeature.tryLink} className="inline-block mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition" tabIndex={0} role="button">Try this feature</a>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       </div>
 
       {/* Main Interface */}

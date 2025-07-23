@@ -191,7 +191,7 @@ export class AIMusicMinistry {
     // Theme matching
     if (criteria.theme) {
       const themeWords = criteria.theme.toLowerCase().split(" ")
-      themeWords.forEach((word) => {
+      themeWords.forEach((word: string) => {
         if (song.themes.some((theme) => theme.toLowerCase().includes(word))) {
           score += 25
         }
@@ -214,8 +214,8 @@ export class AIMusicMinistry {
         peaceful: ["peace", "calm", "rest", "comfort"],
       }
 
-      const moodThemes = moodMapping[criteria.mood] || []
-      moodThemes.forEach((theme) => {
+      const moodThemes = moodMapping[criteria.mood as keyof typeof moodMapping] || [];
+      moodThemes.forEach((theme: string) => {
         if (song.themes.some((t) => t.toLowerCase().includes(theme))) {
           score += 20
         }
@@ -419,7 +419,7 @@ export class AIMusicMinistry {
   }
 
   private static generateChordSuggestions(chords: string[], key: string): string[] {
-    const suggestions = []
+    const suggestions: string[] = []
 
     // Common substitutions
     const substitutions: Record<string, string[]> = {
@@ -448,7 +448,7 @@ export class AIMusicMinistry {
     conflicts: { musicianId: string; reason: string }[]
     suggestions: string[]
   }> {
-    const dayOfWeek = new Date(date).toLocaleLowerCase()
+    const dayOfWeek = new Date(date).toLocaleString('en-US', { weekday: 'long' }).toLowerCase();
     const assigned: { musicianId: string; instrument: string }[] = []
     const conflicts: { musicianId: string; reason: string }[] = []
     const suggestions: string[] = []
@@ -500,16 +500,16 @@ export class AIMusicMinistry {
     const song = this.songs.find((s) => s.id === songId)
     if (!song) throw new Error("Song not found")
 
-    const settings = {
+    const settings: Record<string, string> = {
       originalKey: song.key,
       newKey: options.key || song.key,
       tempo: options.tempo || "normal",
-      removedPart: options.removeVoicePart,
-      clickTrack: options.includeClickTrack,
+      removedPart: options.removeVoicePart || '',
+      clickTrack: String(options.includeClickTrack ?? false),
     }
 
     // Mock track generation
-    const trackUrl = `/api/music/practice-tracks/${songId}?${new URLSearchParams(settings).toString()}`
+    const trackUrl = `/api/music/practice-tracks/${songId}?${new URLSearchParams(settings).toString()}`;
 
     return {
       trackUrl,
@@ -550,6 +550,178 @@ export class AIMusicMinistry {
         mostPopularServiceTime: "Sunday 10:00 AM",
       },
     }
+  }
+
+  static updateSong(id: string, updates: Partial<Song>): Song {
+    // In a real app, this would update the song in the database
+    const songs = this.getSongs();
+    const idx = songs.findIndex(s => s.id === id);
+    if (idx !== -1) {
+      songs[idx] = { ...songs[idx], ...updates };
+      // Persist to storage if needed
+    }
+    return songs[idx];
+  }
+
+  static deleteSong(id: string): void {
+    // In a real app, this would delete the song from the database
+    let songs = this.getSongs();
+    songs = songs.filter(s => s.id !== id);
+    // Persist to storage if needed
+    // For demo, just update the in-memory array
+    // (You may want to use a state setter in the component after calling this)
+  }
+
+  static createSong(songData: Partial<Song>): Song {
+    // In a real app, this would create the song in the database
+    const songs = this.getSongs();
+    const newSong: Song = {
+      id: (Math.random() * 1e9).toFixed(0),
+      title: songData.title || '',
+      artist: songData.artist || '',
+      genre: (songData.genre as Song["genre"]) || 'worship',
+      key: songData.key || '',
+      duration: Number(songData.duration) || 0,
+      difficulty: songData.difficulty || 'beginner',
+      themes: songData.themes || [],
+      audioUrl: songData.audioUrl || '',
+      isPublicDomain: false,
+      tags: [],
+      voiceParts: [],
+      instruments: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      timeSignature: '',
+      language: 'en',
+      tempo: songData.tempo || 'medium',
+    };
+    songs.unshift(newSong);
+    // Persist to storage if needed
+    return newSong;
+  }
+
+  static createSetList(setListData: Partial<SetList>): SetList {
+    // In a real app, this would create the setlist in the database
+    const setLists = this.getSetLists();
+    const newSetList: SetList = {
+      id: (Math.random() * 1e9).toFixed(0),
+      title: setListData.title || '',
+      date: setListData.date || new Date().toISOString().split('T')[0],
+      serviceType: (setListData.serviceType as SetList["serviceType"]) || 'sunday_morning',
+      theme: setListData.theme || '',
+      status: setListData.status || 'draft',
+      songs: setListData.songs || [],
+      totalDuration: setListData.totalDuration || 0,
+      keyFlow: [],
+      tempoFlow: [],
+      createdBy: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setLists.unshift(newSetList);
+    // Persist to storage if needed
+    return newSetList;
+  }
+
+  static updateSetList(id: string, updates: Partial<SetList>): SetList {
+    // In a real app, this would update the setlist in the database
+    const setLists = this.getSetLists();
+    const idx = setLists.findIndex(s => s.id === id);
+    if (idx !== -1) {
+      setLists[idx] = { ...setLists[idx], ...updates };
+      // Persist to storage if needed
+    }
+    return setLists[idx];
+  }
+
+  static deleteSetList(id: string): void {
+    // In a real app, this would delete the setlist from the database
+    let setLists = this.getSetLists();
+    setLists = setLists.filter(s => s.id !== id);
+    // Persist to storage if needed
+    // For demo, just update the in-memory array
+  }
+
+  static createMusician(musicianData: Partial<Musician>): Musician {
+    // In a real app, this would create the musician in the database
+    const musicians = this.getMusicians();
+    const newMusician: Musician = {
+      id: (Math.random() * 1e9).toFixed(0),
+      name: musicianData.name || '',
+      email: musicianData.email || '',
+      phone: musicianData.phone || '',
+      instruments: musicianData.instruments || [],
+      voiceParts: musicianData.voiceParts || [],
+      skillLevel: musicianData.skillLevel || 'beginner',
+      availability: musicianData.availability || {},
+      preferences: musicianData.preferences || { genres: [], languages: [], maxSongsPerService: 0 },
+      isActive: musicianData.isActive || true,
+      joinedAt: musicianData.joinedAt || new Date().toISOString(),
+    };
+    musicians.unshift(newMusician);
+    // Persist to storage if needed
+    return newMusician;
+  }
+
+  static updateMusician(id: string, updates: Partial<Musician>): Musician {
+    // In a real app, this would update the musician in the database
+    const musicians = this.getMusicians();
+    const idx = musicians.findIndex(m => m.id === id);
+    if (idx !== -1) {
+      musicians[idx] = { ...musicians[idx], ...updates };
+      // Persist to storage if needed
+    }
+    return musicians[idx];
+  }
+
+  static deleteMusician(id: string): void {
+    // In a real app, this would delete the musician from the database
+    let musicians = this.getMusicians();
+    musicians = musicians.filter(m => m.id !== id);
+    // Persist to storage if needed
+    // For demo, just update the in-memory array
+  }
+
+  static createRehearsal(rehearsalData: Partial<Rehearsal>): Rehearsal {
+    // In a real app, this would create the rehearsal in the database
+    const rehearsals = this.getRehearsals();
+    const newRehearsal: Rehearsal = {
+      id: (Math.random() * 1e9).toFixed(0),
+      title: rehearsalData.title || '',
+      date: rehearsalData.date || new Date().toISOString().split('T')[0],
+      startTime: rehearsalData.startTime || '',
+      endTime: rehearsalData.endTime || '',
+      location: rehearsalData.location || '',
+      setListId: rehearsalData.setListId || '',
+      attendees: rehearsalData.attendees || [],
+      agenda: rehearsalData.agenda || [],
+      notes: rehearsalData.notes || '',
+      recordings: rehearsalData.recordings || [],
+      status: rehearsalData.status || 'scheduled',
+      createdAt: new Date().toISOString(),
+    };
+    rehearsals.unshift(newRehearsal);
+    // Persist to storage if needed
+    return newRehearsal;
+  }
+
+  static updateRehearsal(id: string, updates: Partial<Rehearsal>): Rehearsal {
+    // In a real app, this would update the rehearsal in the database
+    const rehearsals = this.getRehearsals();
+    const idx = rehearsals.findIndex(r => r.id === id);
+    if (idx !== -1) {
+      rehearsals[idx] = { ...rehearsals[idx], ...updates };
+      // Persist to storage if needed
+    }
+    return rehearsals[idx];
+  }
+
+  static deleteRehearsal(id: string): void {
+    // In a real app, this would delete the rehearsal from the database
+    let rehearsals = this.getRehearsals();
+    rehearsals = rehearsals.filter(r => r.id !== id);
+    // Persist to storage if needed
+    // For demo, just update the in-memory array
   }
 
   // Initialize with demo data
@@ -661,6 +833,7 @@ export class AIMusicMinistry {
         id: "musician-2",
         name: "Sarah Johnson",
         email: "sarah@church.com",
+        phone: "+1234567891",
         instruments: ["Acoustic Guitar", "Electric Guitar"],
         voiceParts: ["soprano", "alto"],
         skillLevel: "professional",
@@ -774,3 +947,119 @@ export class AIMusicMinistry {
 
 // Initialize demo data
 AIMusicMinistry.initializeDemoData()
+
+// --- AI API Route Exports ---
+
+export async function generateSetListAI(songs: Song[], config: {
+  title: string
+  date: string
+  serviceType: string
+  theme?: string
+  duration: number
+  language: string
+  includeHymns?: boolean
+  maxSongs?: number
+  keyPreferences?: string[]
+}) {
+  AIMusicMinistry["songs"] = songs;
+  return AIMusicMinistry.generateSetList(config);
+}
+
+export async function recommendSongsAI(songs: Song[], criteria: {
+  theme?: string
+  mood?: "celebratory" | "reflective" | "worshipful" | "energetic" | "peaceful"
+  serviceType?: string
+  duration?: number
+  language?: string
+  difficulty?: string
+  excludeSongs?: string[]
+}) {
+  AIMusicMinistry["songs"] = songs;
+  return AIMusicMinistry.recommendSongs(criteria);
+}
+
+export async function scheduleMusiciansAI(musicians: Musician[], setListId: string, date: string, requiredInstruments: string[]) {
+  AIMusicMinistry["musicians"] = musicians;
+  return AIMusicMinistry.scheduleMusicians(setListId, date, requiredInstruments);
+}
+
+export async function generateAnalyticsAI({ songs, setlists, musicians }: { songs: Song[], setlists: SetList[], musicians: Musician[] }) {
+  // Compute analytics from real data
+  // Popular Songs: by number of times in setlists
+  const songPlayCounts: Record<string, { title: string, count: number, lastPlayed: string }> = {};
+  setlists.forEach(setlist => {
+    setlist.songs.forEach(s => {
+      if (!songPlayCounts[s.songId]) {
+        songPlayCounts[s.songId] = { title: s.song.title, count: 0, lastPlayed: setlist.date };
+      }
+      songPlayCounts[s.songId].count += 1;
+      if (setlist.date > songPlayCounts[s.songId].lastPlayed) {
+        songPlayCounts[s.songId].lastPlayed = setlist.date;
+      }
+    });
+  });
+  const popularSongs = Object.entries(songPlayCounts)
+    .map(([songId, v]) => ({ songId, title: v.title, timesPlayed: v.count, lastPlayed: v.lastPlayed }))
+    .sort((a, b) => b.timesPlayed - a.timesPlayed)
+    .slice(0, 10);
+
+  // Key Usage
+  const keyCounts: Record<string, number> = {};
+  songs.forEach(song => {
+    keyCounts[song.key] = (keyCounts[song.key] || 0) + 1;
+  });
+  const totalKeys = Object.values(keyCounts).reduce((a, b) => a + b, 0);
+  const keyUsage = Object.entries(keyCounts).map(([key, count]) => ({ key, count, percentage: totalKeys ? Math.round((count / totalKeys) * 100) : 0 }));
+
+  // Genre Distribution
+  const genreCounts: Record<string, number> = {};
+  songs.forEach(song => {
+    genreCounts[song.genre] = (genreCounts[song.genre] || 0) + 1;
+  });
+  const totalGenres = Object.values(genreCounts).reduce((a, b) => a + b, 0);
+  const genreDistribution = Object.entries(genreCounts).map(([genre, count]) => ({ genre, count, percentage: totalGenres ? Math.round((count / totalGenres) * 100) : 0 }));
+
+  // Musician Participation
+  const musicianParticipation = musicians.map(musician => {
+    // Count services and rehearsals attended
+    let servicesAttended = 0;
+    let rehearsalsAttended = 0;
+    setlists.forEach(setlist => {
+      // If musician is in any song's instruments, count as attended
+      if (setlist.songs.some(s => s.song.instruments.some(i => musician.instruments.includes(i.name)))) {
+        servicesAttended += 1;
+      }
+    });
+    // For rehearsals, if musician is in attendees
+    rehearsalsAttended = 0; // Not enough info unless rehearsal data is passed
+    return {
+      musicianId: musician.id,
+      name: musician.name,
+      servicesAttended,
+      rehearsalsAttended,
+    };
+  });
+
+  // Service Metrics
+  const averageSongsPerService = setlists.length ? (setlists.reduce((sum, s) => sum + s.songs.length, 0) / setlists.length) : 0;
+  const averageServiceDuration = setlists.length ? (setlists.reduce((sum, s) => sum + s.totalDuration, 0) / setlists.length) : 0;
+  // Most popular service time (by date string hour)
+  const timeCounts: Record<string, number> = {};
+  setlists.forEach(s => {
+    const hour = (s.date.split('T')[1] || '00:00').slice(0, 5);
+    timeCounts[hour] = (timeCounts[hour] || 0) + 1;
+  });
+  const mostPopularServiceTime = Object.entries(timeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
+
+  return {
+    popularSongs,
+    keyUsage,
+    genreDistribution,
+    musicianParticipation,
+    serviceMetrics: {
+      averageSongsPerService: Number(averageSongsPerService.toFixed(2)),
+      averageServiceDuration: Number((averageServiceDuration / 60).toFixed(2)), // convert to minutes
+      mostPopularServiceTime,
+    },
+  };
+}

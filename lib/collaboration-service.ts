@@ -1,11 +1,11 @@
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { supabase } from '@/lib/supabase-client';
 import { CollaborationDocument, CollaborationVersion } from "./types/collaboration"
 
 /**
  * Service for managing collaborative documents
  */
 export class CollaborationService {
-  private supabase = createClientComponentClient()
+  private supabase = supabase
   
   /**
    * Get a document by ID

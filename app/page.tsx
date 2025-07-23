@@ -5,6 +5,9 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { Users, DollarSign, Calendar, Heart } from "lucide-react"
 import Image from "next/image"
 
+export const themeColor = "#000000";
+export const viewport = "width=device-width, initial-scale=1, maximum-scale=1";
+
 export default function ChurchApp() {
   const searchParams = useSearchParams()
   const router = useRouter()

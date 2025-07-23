@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { supabase } from '@/lib/supabase-client';
 import { PresenceService } from "../lib/presence-service"
 import { PresenceOptions, PresenceState, PresenceActions, UsePresenceResult, PresenceUser } from "../lib/types/presence"
 import { PresenceStatus } from "../lib/database-types"
@@ -40,7 +40,6 @@ export function usePresence(options: PresenceOptions): UsePresenceResult {
     updateInterval = 30000, // 30 seconds
   } = options
   
-  const supabase = createClientComponentClient()
   const presenceService = useRef(new PresenceService())
   const presenceIdRef = useRef<string | null>(null)
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null)

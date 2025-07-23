@@ -1,11 +1,11 @@
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { supabase } from '@/lib/supabase-client';
 import { ChatChannelType, ChatContentType, ChatMemberRole } from "./database-types"
 
 /**
  * Service for managing chat functionality
  */
 export class ChatService {
-  private supabase = createClientComponentClient()
+  private supabase = supabase
   
   /**
    * Create a new chat channel

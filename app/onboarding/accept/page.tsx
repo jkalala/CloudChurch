@@ -4,6 +4,9 @@ import { useSearchParams } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
+export const themeColor = "#000000";
+export const viewport = "width=device-width, initial-scale=1, maximum-scale=1";
+
 export default function AcceptInvitationPage() {
   const searchParams = useSearchParams()
   const token = searchParams.get("token")

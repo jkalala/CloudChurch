@@ -1,4 +1,4 @@
-import { supabase, getAuthenticatedClient } from "./supabase"
+import { supabase, getAuthenticatedClient } from "./supabase-client"
 
 /* ──────────────────
  *  TYPES

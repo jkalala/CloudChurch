@@ -32,7 +32,7 @@ export function createCollaborationProvider(options: CollaborationProviderOption
   
   // Create IndexedDB provider for offline support if enabled
   let indexeddbProvider: IndexeddbPersistence | null = null
-  if (enableOffline) {
+  if (enableOffline && typeof window !== 'undefined') {
     indexeddbProvider = new IndexeddbPersistence(`document-${documentId}`, ydoc)
   }
   

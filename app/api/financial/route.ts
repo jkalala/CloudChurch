@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { DatabaseService } from "@/lib/database"
 import { createServerClient } from "@/lib/supabase-client"
 import { getUserRoleFromRequest } from "@/lib/auth-helpers"
+import { recommendBudgetCategories, generateFinancialAnalytics, detectAnomalies } from '@/lib/ai-finance';
+import type { FinancialTransaction as DBFinancialTransaction } from '@/lib/database';
 
 // Helper to extract access token from cookies
 function getAccessToken(request: NextRequest) {
@@ -11,6 +13,20 @@ function getAccessToken(request: NextRequest) {
     return [k, decodeURIComponent(v.join('='))]
   }))
   return cookies["sb-access-token"] || cookies["access_token"]
+}
+
+function mapToAIFinancialTransaction(tx: DBFinancialTransaction) {
+  return {
+    id: tx.id,
+    date: tx.transaction_date,
+    amount: tx.amount,
+    type: tx.transaction_type === 'income' ? 'income' : 'expense' as 'income' | 'expense',
+    category: tx.category,
+    description: tx.description,
+    account: tx.payment_method,
+    created_by: tx.created_by,
+    created_at: tx.created_at,
+  };
 }
 
 export async function GET() {
@@ -108,5 +124,42 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     console.error("Error deleting transaction:", error)
     return NextResponse.json({ error: "Failed to delete transaction" }, { status: 500 })
+  }
+}
+
+// AI Analytics endpoint
+export async function GET_ANALYTICS() {
+  try {
+    const transactionsRaw = await DatabaseService.getFinancialTransactions();
+    const transactions = transactionsRaw.map(mapToAIFinancialTransaction);
+    const analytics = await generateFinancialAnalytics({ transactions });
+    return NextResponse.json(analytics);
+  } catch (error) {
+    return NextResponse.json({ error: 'Failed to generate analytics' }, { status: 500 });
+  }
+}
+
+// AI Recommend Categories endpoint
+export async function POST_RECOMMEND_CATEGORIES(request: NextRequest) {
+  try {
+    const transactionsRaw = await DatabaseService.getFinancialTransactions();
+    const transactions = transactionsRaw.map(mapToAIFinancialTransaction);
+    const criteria = await request.json();
+    const recommendations = await recommendBudgetCategories(transactions, criteria);
+    return NextResponse.json({ recommendations });
+  } catch (error) {
+    return NextResponse.json({ error: 'Failed to recommend categories' }, { status: 500 });
+  }
+}
+
+// AI Anomaly Detection endpoint
+export async function GET_ANOMALIES() {
+  try {
+    const transactionsRaw = await DatabaseService.getFinancialTransactions();
+    const transactions = transactionsRaw.map(mapToAIFinancialTransaction);
+    const anomalies = await detectAnomalies(transactions);
+    return NextResponse.json({ anomalies });
+  } catch (error) {
+    return NextResponse.json({ error: 'Failed to detect anomalies' }, { status: 500 });
   }
 }

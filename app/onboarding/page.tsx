@@ -9,6 +9,9 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion";
 
+export const themeColor = "#000000";
+export const viewport = "width=device-width, initial-scale=1, maximum-scale=1";
+
 export default function OnboardingPage() {
   const [currentSlide, setCurrentSlide] = useState(0)
   const router = useRouter()

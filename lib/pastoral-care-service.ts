@@ -182,6 +182,17 @@ export class PastoralCareService {
     }
   }
 
+  // Add this method for deleting care records
+  static async deleteCareRecord(id: string): Promise<void> {
+    try {
+      const { error } = await this.supabase.from('care_records').delete().eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting care record:', error);
+      throw error;
+    }
+  }
+
   // Prayer Requests Management
   static async getPrayerRequests(filters?: {
     status?: string
@@ -219,6 +230,32 @@ export class PastoralCareService {
     } catch (error) {
       console.error("Error creating prayer request:", error)
       throw error
+    }
+  }
+
+  static async updatePrayerRequest(id: string, updates: Partial<PrayerRequest>): Promise<PrayerRequest> {
+    try {
+      const { data, error } = await this.supabase
+        .from('prayer_requests')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error updating prayer request:', error);
+      throw error;
+    }
+  }
+
+  static async deletePrayerRequest(id: string): Promise<void> {
+    try {
+      const { error } = await this.supabase.from('prayer_requests').delete().eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting prayer request:', error);
+      throw error;
     }
   }
 
@@ -276,6 +313,32 @@ export class PastoralCareService {
     } catch (error) {
       console.error("Error creating crisis alert:", error)
       throw error
+    }
+  }
+
+  static async updateCrisisAlert(id: string, updates: Partial<CrisisAlert>): Promise<CrisisAlert> {
+    try {
+      const { data, error } = await this.supabase
+        .from('crisis_alerts')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error updating crisis alert:', error);
+      throw error;
+    }
+  }
+
+  static async deleteCrisisAlert(id: string): Promise<void> {
+    try {
+      const { error } = await this.supabase.from('crisis_alerts').delete().eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting crisis alert:', error);
+      throw error;
     }
   }
 

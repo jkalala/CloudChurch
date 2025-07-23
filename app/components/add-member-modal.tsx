@@ -11,11 +11,10 @@ import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { UserPlus, Loader2 } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
 
 interface Member {
-  id?: number | string
+  id?: string
+  name?: string
   first_name: string
   last_name: string
   email?: string
@@ -29,6 +28,8 @@ interface Member {
   department?: string
   emergency_contact?: string
   notes?: string
+  join_date?: string
+  member_status?: string
 }
 
 interface AddMemberModalProps {
@@ -53,64 +54,60 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
     emergency_contact: "",
     notes: "",
   })
-  const [submitting, setSubmitting] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    setSubmitting(true)
-    await onSubmit({
-      ...formData,
-      date_of_birth: formData.date_of_birth?.toISOString(),
-      baptism_date: formData.baptism_date?.toISOString(),
-    })
-    setSubmitting(false)
-    setFormData({
-      first_name: "",
-      last_name: "",
-      email: "",
-      phone: "",
-      address: "",
-      date_of_birth: undefined,
-      baptism_date: undefined,
-      gender: "",
-      marital_status: "",
-      occupation: "",
-      department: "",
-      emergency_contact: "",
-      notes: "",
-    })
+    setLoading(true)
+    setError(null)
+    try {
+      await onSubmit({
+        ...formData,
+        date_of_birth: formData.date_of_birth ? formData.date_of_birth.toISOString().slice(0, 10) : undefined,
+        baptism_date: formData.baptism_date ? formData.baptism_date.toISOString().slice(0, 10) : undefined,
+        join_date: new Date().toISOString().slice(0, 10),
+        member_status: "active",
+      })
+      setFormData({
+        first_name: "",
+        last_name: "",
+        email: "",
+        phone: "",
+        address: "",
+        date_of_birth: undefined,
+        baptism_date: undefined,
+        gender: "",
+        marital_status: "",
+        occupation: "",
+        department: "",
+        emergency_contact: "",
+        notes: "",
+      })
+      onOpenChange(false)
+    } catch (err: any) {
+      setError(err.message || 'Erro ao adicionar membro')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <DialogShell isOpen={open} onClose={() => onOpenChange(false)} title=" " size="xl" className="max-w-xl">
-      <div className="flex flex-col items-center gap-2 mb-4">
-        <UserPlus className="h-10 w-10 text-blue-600 animate-pop-in" />
-        <h2 className="text-2xl font-bold text-center">Adicionar Novo Membro</h2>
-        <p className="text-gray-500 text-center">Preencha os campos abaixo para cadastrar um novo membro.</p>
-      </div>
-      <AnimatePresence>
-        {submitting && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2 justify-center mb-4">
-            <Loader2 className="animate-spin h-5 w-5 text-blue-500" />
-            <span className="text-blue-600">Adicionando membro...</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <form onSubmit={handleSubmit} className="space-y-6 max-h-[80vh] overflow-y-auto animate-fade-in">
+    <DialogShell isOpen={open} onClose={() => onOpenChange(false)} title="Adicionar Novo Membro" size="xl" className="max-w-xl">
+      <form onSubmit={handleSubmit} className="space-y-6 max-h-[90vh] overflow-y-auto">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="first_name" className="font-medium">Primeiro Nome *</label>
+            <label htmlFor="first_name">Primeiro Nome *</label>
             <Input
               id="first_name"
               name="first_name"
               value={formData.first_name}
               onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
               required
-              autoFocus
             />
           </div>
           <div>
-            <label htmlFor="last_name" className="font-medium">Último Nome *</label>
+            <label htmlFor="last_name">Último Nome *</label>
             <Input
               id="last_name"
               name="last_name"
@@ -120,9 +117,10 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             />
           </div>
         </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="email" className="font-medium">Email</label>
+            <label htmlFor="email">Email</label>
             <Input
               id="email"
               name="email"
@@ -132,7 +130,7 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             />
           </div>
           <div>
-            <label htmlFor="phone" className="font-medium">Telefone</label>
+            <label htmlFor="phone">Telefone</label>
             <Input
               id="phone"
               name="phone"
@@ -141,8 +139,9 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             />
           </div>
         </div>
+
         <div>
-          <label htmlFor="address" className="font-medium">Endereço</label>
+          <label htmlFor="address">Endereço</label>
           <Input
             id="address"
             name="address"
@@ -150,9 +149,10 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             onChange={(e) => setFormData({ ...formData, address: e.target.value })}
           />
         </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="font-medium">Data de Nascimento</label>
+            <label>Data de Nascimento</label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -177,7 +177,7 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             </Popover>
           </div>
           <div>
-            <label className="font-medium">Data de Batismo</label>
+            <label>Data de Batismo</label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -202,9 +202,10 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             </Popover>
           </div>
         </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="gender" className="font-medium">Gênero</label>
+            <label htmlFor="gender">Gênero</label>
             <Select value={formData.gender} onValueChange={(value) => setFormData({ ...formData, gender: value })}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecionar gênero" />
@@ -216,7 +217,7 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             </Select>
           </div>
           <div>
-            <label htmlFor="marital_status" className="font-medium">Estado Civil</label>
+            <label htmlFor="marital_status">Estado Civil</label>
             <Select
               value={formData.marital_status}
               onValueChange={(value) => setFormData({ ...formData, marital_status: value })}
@@ -233,9 +234,10 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             </Select>
           </div>
         </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="occupation" className="font-medium">Profissão</label>
+            <label htmlFor="occupation">Profissão</label>
             <Input
               id="occupation"
               name="occupation"
@@ -244,7 +246,7 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             />
           </div>
           <div>
-            <label htmlFor="department" className="font-medium">Departamento</label>
+            <label htmlFor="department">Departamento</label>
             <Select
               value={formData.department}
               onValueChange={(value) => setFormData({ ...formData, department: value })}
@@ -262,8 +264,9 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             </Select>
           </div>
         </div>
+
         <div>
-          <label htmlFor="emergency_contact" className="font-medium">Contato de Emergência</label>
+          <label htmlFor="emergency_contact">Contato de Emergência</label>
           <Input
             id="emergency_contact"
             name="emergency_contact"
@@ -271,8 +274,9 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             onChange={(e) => setFormData({ ...formData, emergency_contact: e.target.value })}
           />
         </div>
+
         <div>
-          <label htmlFor="notes" className="font-medium">Observações</label>
+          <label htmlFor="notes">Observações</label>
           <Textarea
             id="notes"
             name="notes"
@@ -281,13 +285,13 @@ export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalP
             rows={3}
           />
         </div>
+        {error && <div className="text-red-600 text-sm">{error}</div>}
         <div className="flex flex-col md:flex-row gap-2 pt-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-full md:w-auto">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-full md:w-auto" disabled={loading}>
             Cancelar
           </Button>
-          <Button type="submit" className="w-full md:w-auto" disabled={submitting}>
-            {submitting ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
-            Adicionar Membro
+          <Button type="submit" className="w-full md:w-auto" disabled={loading}>
+            {loading ? 'Adicionando...' : 'Adicionar Membro'}
           </Button>
         </div>
       </form>

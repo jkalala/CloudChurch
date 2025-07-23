@@ -20,6 +20,9 @@ import AIAssistantHub from '@/app/components/ai-assistant-hub';
 import { useAuth } from "@/components/auth-provider";
 import { useTranslation } from "@/lib/i18n";
 
+export const themeColor = "#000000";
+export const viewport = "width=device-width, initial-scale=1, maximum-scale=1";
+
 // Core features always enabled
 const coreFeatureKeys = [
   'members', 'events', 'financial', 'departments', 'streaming', 'pastoral', 'outreach', 'resources', 'ai'

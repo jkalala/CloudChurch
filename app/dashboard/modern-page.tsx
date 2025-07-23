@@ -43,11 +43,11 @@ export default function ModernLeaderDashboard() {
 
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-8">
-      <Card>
-        <CardHeader>
+            <Card>
+              <CardHeader>
           <CardTitle>Volunteer Hours by Member</CardTitle>
-        </CardHeader>
-        <CardContent>
+              </CardHeader>
+              <CardContent>
           {loading ? <div>Loading...</div> : (
             <Bar
               data={{
@@ -67,13 +67,13 @@ export default function ModernLeaderDashboard() {
               }}
             />
           )}
-        </CardContent>
-      </Card>
+              </CardContent>
+            </Card>
       <Card>
-        <CardHeader>
+            <CardHeader>
           <CardTitle>Group Participation</CardTitle>
-        </CardHeader>
-        <CardContent>
+            </CardHeader>
+            <CardContent>
           <div className="mb-4">
             <Select value={selectedGroup} onValueChange={setSelectedGroup}>
               <SelectTrigger className="w-64"><SelectValue placeholder="Filter by Group" /></SelectTrigger>
@@ -82,7 +82,7 @@ export default function ModernLeaderDashboard() {
                 {groups.map((g: any) => <SelectItem key={g.id} value={g.name}>{g.name}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
+                  </div>
           {loading ? <div>Loading...</div> : (
             <Bar
               data={{
@@ -102,8 +102,8 @@ export default function ModernLeaderDashboard() {
               }}
             />
           )}
-        </CardContent>
-      </Card>
-    </div>
+            </CardContent>
+          </Card>
+      </div>
   )
 }
