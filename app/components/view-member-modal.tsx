@@ -16,6 +16,7 @@ import { QRCodeCanvas } from "qrcode.react"
 // @ts-ignore
 import html2canvas from 'html2canvas'
 import { DatabaseService } from "@/lib/database"
+import { MemberAuditLogModal } from "./member-audit-log-modal";
 
 interface ViewMemberModalProps {
   memberId: string
@@ -24,17 +25,8 @@ interface ViewMemberModalProps {
 export function ViewMemberModal({ memberId }: ViewMemberModalProps) {
   const [member, setMember] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  useEffect(() => {
-    setLoading(true)
-    DatabaseService.getMemberById(memberId).then(m => {
-      setMember(m)
-      setLoading(false)
-    })
-  }, [memberId])
-  if (loading) return <div>Loading...</div>
-  if (!member) return <div>Member not found.</div>
-
-  // --- New state for tabs ---
+  
+  // --- All hooks must be called before any conditional returns ---
   const [tab, setTab] = useState<'attachments' | 'fields' | 'tags'>('attachments')
   const [attachments, setAttachments] = useState<any[]>([])
   const [uploading, setUploading] = useState(false)
@@ -46,18 +38,54 @@ export function ViewMemberModal({ memberId }: ViewMemberModalProps) {
   const dropRef = useRef<HTMLDivElement>(null)
   const [dragActive, setDragActive] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
-  useEffect(() => {
-    MemberService.getAttachments(memberId).then((r: any) => setAttachments(r.attachments || []))
-    MemberService.getCustomFields().then((r: any) => setCustomFields(r.customFields || []))
-    MemberService.getMemberCustomFields(memberId).then((r: any) => setMemberFields(r.fields || []))
-    MemberService.getTags(memberId).then((r: any) => setTags(r.tags || []))
-    MemberService.getTags().then((r: any) => setAllTags(r.tags || []))
-  }, [memberId])
-  // ---
-
   const [open, setOpen] = useState(true)
   const [showCard, setShowCard] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
+  const [showAuditLog, setShowAuditLog] = useState(false);
+
+  useEffect(() => {
+    setLoading(true)
+    DatabaseService.getMemberById(memberId).then(m => {
+      setMember(m)
+      setLoading(false)
+    })
+  }, [memberId])
+
+  useEffect(() => {
+    if (memberId) {
+      MemberService.getAttachments(memberId).then((r: any) => setAttachments(r.attachments || []))
+      MemberService.getCustomFields().then((r: any) => setCustomFields(r.customFields || []))
+      MemberService.getMemberCustomFields(memberId).then((r: any) => setMemberFields(r.fields || []))
+      MemberService.getTags(memberId).then((r: any) => setTags(r.tags || []))
+      MemberService.getTags().then((r: any) => setAllTags(r.tags || []))
+    }
+  }, [memberId])
+
+  if (loading) return (
+    <DialogShell title="Member Details" isOpen={open} onClose={() => setOpen(false)}>
+      <DialogContent className="sm:max-w-2xl">
+        <div className="flex items-center justify-center p-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p>Loading member details...</p>
+          </div>
+        </div>
+      </DialogContent>
+    </DialogShell>
+  );
+  
+  if (!member) return (
+    <DialogShell title="Member Details" isOpen={open} onClose={() => setOpen(false)}>
+      <DialogContent className="sm:max-w-2xl">
+        <div className="flex items-center justify-center p-8">
+          <div className="text-center">
+            <p className="text-red-600">Member not found.</p>
+            <Button onClick={() => setOpen(false)} className="mt-4">Close</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </DialogShell>
+  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -81,6 +109,17 @@ export function ViewMemberModal({ memberId }: ViewMemberModalProps) {
     }
     return age
   }
+
+  const handleExportData = () => {
+    if (!member) return;
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(member, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", `member-${member.id}.json`);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  };
 
   return (
     <DialogShell title="Member Details" isOpen={open} onClose={() => setOpen(false)}>
@@ -405,9 +444,16 @@ export function ViewMemberModal({ memberId }: ViewMemberModalProps) {
               link.href = canvas.toDataURL()
               link.click()
             }}>Download Card</Button>
+            <Button size="sm" variant="outline" onClick={handleExportData}>
+              Export Data
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setShowAuditLog(true)}>
+              View Change History
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
+      <MemberAuditLogModal isOpen={showAuditLog} onClose={() => setShowAuditLog(false)} memberId={memberId} />
     </DialogShell>
   )
 }

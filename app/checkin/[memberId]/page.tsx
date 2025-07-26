@@ -19,26 +19,42 @@ export default function CheckinPage({ params }: { params: { memberId: string } }
       const { data: m } = await supabase.from("members").select("*", { count: "exact" }).eq("id", memberId).single()
       setMember(m)
       if (!m) { setStatus("error"); return }
+      
       // Check if already checked in today
       const today = new Date().toISOString().slice(0, 10)
-      const { data: existing } = await supabase.from("attendance").select("*").eq("member_id", memberId).eq("date", today).single()
+      const { data: existing } = await supabase
+        .from("attendance")
+        .select("*")
+        .eq("member_id", memberId)
+        .gte("check_in_time", today + "T00:00:00")
+        .lt("check_in_time", today + "T23:59:59")
+        .single()
+      
       if (existing) {
         setStatus("already")
-        setCheckedInAt(existing.checked_in_at)
+        setCheckedInAt(existing.check_in_time)
         return
       }
-      // Insert attendance
-      const { error, data: att } = await supabase.from("attendance").insert({
-        member_id: memberId,
-        date: today,
-        activity: "church",
-        checked_in_at: new Date().toISOString(),
-      }).select().single()
-      if (error) setStatus("error")
-      else {
-        setStatus("success")
-        setCheckedInAt(att.checked_in_at)
+      
+      // Insert attendance using the API route which handles field mapping
+      const response = await fetch("/api/attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member_id: memberId,
+          activity: "church",
+          checked_in_at: new Date().toISOString(),
+        })
+      })
+      
+      if (!response.ok) {
+        setStatus("error")
+        return
       }
+      
+      const att = await response.json()
+      setStatus("success")
+      setCheckedInAt(att.check_in_time)
     }
     checkin()
   }, [memberId])

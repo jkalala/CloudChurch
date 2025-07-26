@@ -39,7 +39,7 @@ ALTER TABLE members ADD CONSTRAINT fk_members_family
 CREATE TABLE attendance (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     member_id UUID REFERENCES members(id),
-    event_id UUID,
+    event_id UUID REFERENCES events(id) NULL,
     check_in_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     check_out_time TIMESTAMP,
     attendance_type VARCHAR(50), -- 'service', 'meeting', 'event'

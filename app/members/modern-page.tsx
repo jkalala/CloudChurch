@@ -34,7 +34,6 @@ export default function ModernMembersPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         member_id: memberId,
-        date: new Date().toISOString().slice(0, 10),
         activity: checkinEvent,
         checked_in_at: new Date().toISOString(),
       })
@@ -76,7 +75,7 @@ export default function ModernMembersPage() {
                   <li key={i} className="flex gap-2 items-center text-sm border-b py-1">
                     <span>{a.date}</span>
                     <span className="text-gray-500">{a.activity}</span>
-                    <span className="text-xs text-gray-400">{a.checked_in_at && new Date(a.checked_in_at).toLocaleTimeString()}</span>
+                    <span className="text-xs text-gray-400">{a.check_in_time && new Date(a.check_in_time).toLocaleTimeString()}</span>
                   </li>
                 ))}
                 {attendance.length === 0 && <li className="text-gray-400">No attendance records yet.</li>}

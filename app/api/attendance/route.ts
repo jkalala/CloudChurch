@@ -12,12 +12,22 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const stats = await DatabaseService.getAttendanceStats()
-    return NextResponse.json(stats)
+    const { searchParams } = new URL(request.url)
+    const memberId = searchParams.get('member_id')
+    
+    if (memberId) {
+      // Get attendance records for a specific member
+      const records = await DatabaseService.getAttendanceRecordsByMember(memberId)
+      return NextResponse.json({ records })
+    } else {
+      // Get general attendance stats
+      const stats = await DatabaseService.getAttendanceStats()
+      return NextResponse.json(stats)
+    }
   } catch (error) {
-    console.error("Error fetching attendance stats:", error)
-    return NextResponse.json({ error: "Failed to fetch attendance stats" }, { status: 500 })
+    console.error("Error fetching attendance data:", error)
+    return NextResponse.json({ error: "Failed to fetch attendance data" }, { status: 500 })
   }
 }

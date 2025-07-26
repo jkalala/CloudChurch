@@ -45,121 +45,30 @@ import {
   BarChart,
   PieChart,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Edit,
+  Trash2,
+  Eye
 } from 'lucide-react';
-import { format, parseISO, subDays } from 'date-fns';
+import { format, parseISO, subDays, startOfMonth, endOfMonth } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-
-export const themeColor = "#000000";
-export const viewport = "width=device-width, initial-scale=1, maximum-scale=1";
-
-// Remove sample transaction and budget data
-// const transactions = [
-//   {
-//     id: '1',
-//     date: '2025-07-18',
-//     description: 'Sunday Offering',
-//     category: 'Tithes',
-//     amount: 3250.00,
-//     type: 'income',
-//     method: 'cash',
-//     status: 'completed'
-//   },
-//   {
-//     id: '2',
-//     date: '2025-07-18',
-//     description: 'Online Donation',
-//     category: 'Tithes',
-//     amount: 1750.50,
-//     type: 'income',
-//     method: 'online',
-//     status: 'completed'
-//   },
-//   {
-//     id: '3',
-//     date: '2025-07-17',
-//     description: 'Utility Bill Payment',
-//     category: 'Utilities',
-//     amount: 425.75,
-//     type: 'expense',
-//     method: 'check',
-//     status: 'completed'
-//   },
-//   {
-//     id: '4',
-//     date: '2025-07-16',
-//     description: 'Youth Camp Registrations',
-//     category: 'Events',
-//     amount: 1200.00,
-//     type: 'income',
-//     method: 'online',
-//     status: 'completed'
-//   },
-//   {
-//     id: '5',
-//     date: '2025-07-15',
-//     description: 'Office Supplies',
-//     category: 'Administration',
-//     amount: 187.45,
-//     type: 'expense',
-//     method: 'card',
-//     status: 'completed'
-//   },
-//   {
-//     id: '6',
-//     date: '2025-07-14',
-//     description: 'Staff Salary',
-//     category: 'Payroll',
-//     amount: 4500.00,
-//     type: 'expense',
-//     method: 'transfer',
-//     status: 'completed'
-//   }
-// ];
-
-// const budgets = [
-//   {
-//     id: '1',
-//     category: 'Facilities',
-//     allocated: 5000.00,
-//     spent: 3250.75,
-//     remaining: 1749.25,
-//     period: 'July 2025'
-//   },
-//   {
-//     id: '2',
-//     category: 'Ministries',
-//     allocated: 3000.00,
-//     spent: 1875.50,
-//     remaining: 1124.50,
-//     period: 'July 2025'
-//   },
-//   {
-//     id: '3',
-//     category: 'Missions',
-//     allocated: 2500.00,
-//     spent: 1000.00,
-//     remaining: 1500.00,
-//     period: 'July 2025'
-//   },
-//   {
-//     id: '4',
-//     category: 'Administration',
-//     allocated: 1500.00,
-//     spent: 875.25,
-//     remaining: 624.75,
-//     period: 'July 2025'
-//   },
-//   {
-//     id: '5',
-//     category: 'Events',
-//     allocated: 2000.00,
-//     spent: 1250.00,
-//     remaining: 750.00,
-//     period: 'July 2025'
-//   }
-// ];
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { 
+  BarChart as RechartsBarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line
+} from 'recharts';
 
 // Define types for transactions and budgets
 interface Transaction {
@@ -171,6 +80,8 @@ interface Transaction {
   type: 'income' | 'expense';
   method: string;
   status?: string;
+  member_id?: string;
+  member_name?: string;
 }
 
 interface Budget {
@@ -182,33 +93,51 @@ interface Budget {
   period: string;
 }
 
+interface Expense {
+  id: string;
+  budget_id?: string;
+  category_id?: string;
+  amount: number;
+  description: string;
+  date: string;
+  payment_method: string;
+  receipt_url?: string;
+  vendor?: string;
+  approved_by?: string;
+  status: "pending" | "approved" | "rejected";
+  notes?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const themeColor = "#000000";
+
 export default function FinancesPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [dateRange, setDateRange] = useState<'week' | 'month' | 'quarter' | 'year'>('month');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  
+  // Modal states
   const [showTransactionModal, setShowTransactionModal] = useState(false);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [formState, setFormState] = useState<Partial<Transaction>>({});
+  const [expenseFormState, setExpenseFormState] = useState<Partial<Expense>>({});
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  
+  // Delete dialog states
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
+  const [deletingItem, setDeletingItem] = useState<Transaction | Expense | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  
-  // Budget modal and delete dialog state
-  const [showBudgetModal, setShowBudgetModal] = useState(false);
-  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
-  const [budgetFormState, setBudgetFormState] = useState<Partial<Budget>>({});
-  const [budgetFormLoading, setBudgetFormLoading] = useState(false);
-  const [budgetFormError, setBudgetFormError] = useState<string | null>(null);
-  const [showBudgetDeleteDialog, setShowBudgetDeleteDialog] = useState(false);
-  const [deletingBudget, setDeletingBudget] = useState<Budget | null>(null);
-  const [budgetDeleteLoading, setBudgetDeleteLoading] = useState(false);
-  const [budgetDeleteError, setBudgetDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -218,12 +147,18 @@ export default function FinancesPage() {
         const res = await fetch('/api/financial');
         const data = await res.json();
         setTransactions((data.transactions || []) as Transaction[]);
+        
+        // Fetch expenses
+        const expensesRes = await fetch('/api/financial/expenses');
+        const expensesData = await expensesRes.json();
+        setExpenses(expensesData || []);
+        
         // Fetch budgets
         const budgetsRes = await fetch('/api/financial?budgets=1');
         const budgetsData = await budgetsRes.json();
         setBudgets((budgetsData.budgets || []) as Budget[]);
       } catch (err) {
-        // Optionally handle error
+        console.error('Error fetching financial data:', err);
       } finally {
         setLoading(false);
       }
@@ -246,12 +181,15 @@ export default function FinancesPage() {
     
   const balance = totalIncome - totalExpenses;
   
-  // Filter transactions based on search query and type filter
+  // Filter transactions based on search query and filters
   const filteredTransactions = transactions.filter(transaction => {
-    // First filter by type
+    // Filter by type
     if (typeFilter !== 'all' && transaction.type !== typeFilter) return false;
     
-    // Then filter by search query
+    // Filter by category
+    if (categoryFilter !== 'all' && transaction.category !== categoryFilter) return false;
+    
+    // Filter by search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
@@ -263,7 +201,24 @@ export default function FinancesPage() {
     
     return true;
   });
-  
+
+  // Chart data
+  const monthlyData = [
+    { month: 'Jan', income: 18500, expenses: 15200 },
+    { month: 'Feb', income: 17800, expenses: 14900 },
+    { month: 'Mar', income: 19200, expenses: 16100 },
+    { month: 'Apr', income: 20100, expenses: 15800 },
+    { month: 'May', income: 18900, expenses: 16200 },
+    { month: 'Jun', income: 21500, expenses: 17500 },
+  ];
+
+  const categoryData = [
+    { name: 'Tithes', value: totalIncome * 0.4, color: '#8884d8' },
+    { name: 'Offerings', value: totalIncome * 0.3, color: '#82ca9d' },
+    { name: 'Donations', value: totalIncome * 0.2, color: '#ffc658' },
+    { name: 'Events', value: totalIncome * 0.1, color: '#ff7300' },
+  ];
+
   // Get transaction type badge class
   const getTransactionTypeBadge = (type: string) => {
     switch (type) {
@@ -292,29 +247,48 @@ export default function FinancesPage() {
       currency: 'USD'
     }).format(amount);
   };
-  
-  // Calculate budget progress percentage
-  const getBudgetProgress = (spent: number, allocated: number) => {
-    return Math.round((spent / allocated) * 100);
-  };
 
-  // Handlers for opening/closing modal
+  // Handlers for transaction modal
   const openNewTransactionModal = () => {
     setEditingTransaction(null);
     setFormState({});
     setShowTransactionModal(true);
     setFormError(null);
   };
+
   const openEditTransactionModal = (transaction: Transaction) => {
     setEditingTransaction(transaction);
     setFormState(transaction);
     setShowTransactionModal(true);
     setFormError(null);
   };
+
   const closeTransactionModal = () => {
     setShowTransactionModal(false);
     setEditingTransaction(null);
     setFormState({});
+    setFormError(null);
+  };
+
+  // Handlers for expense modal
+  const openNewExpenseModal = () => {
+    setEditingExpense(null);
+    setExpenseFormState({});
+    setShowExpenseModal(true);
+    setFormError(null);
+  };
+
+  const openEditExpenseModal = (expense: Expense) => {
+    setEditingExpense(expense);
+    setExpenseFormState(expense);
+    setShowExpenseModal(true);
+    setFormError(null);
+  };
+
+  const closeExpenseModal = () => {
+    setShowExpenseModal(false);
+    setEditingExpense(null);
+    setExpenseFormState({});
     setFormError(null);
   };
 
@@ -324,154 +298,146 @@ export default function FinancesPage() {
     setFormState(prev => ({ ...prev, [name]: value }));
   };
 
-  // Handle form submit (create or update)
+  const handleExpenseFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setExpenseFormState(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Handle form submission
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormLoading(true);
     setFormError(null);
+
     try {
+      const url = editingTransaction ? '/api/financial' : '/api/financial';
       const method = editingTransaction ? 'PUT' : 'POST';
-      const body = editingTransaction ? { ...formState, id: editingTransaction.id } : formState;
-      const res = await fetch('/api/financial', {
+      const body = editingTransaction 
+        ? { id: editingTransaction.id, ...formState }
+        : formState;
+
+      const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to save transaction');
+
+      if (!response.ok) {
+        throw new Error('Failed to save transaction');
       }
-      // Refresh transactions
-      const data = await fetch('/api/financial').then(r => r.json());
+
+      // Refresh data
+      const res = await fetch('/api/financial');
+      const data = await res.json();
       setTransactions((data.transactions || []) as Transaction[]);
+      
       closeTransactionModal();
-    } catch (err: any) {
-      setFormError(err.message || 'Error');
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'An error occurred');
     } finally {
       setFormLoading(false);
     }
   };
 
-  // Delete handlers
-  const openDeleteDialog = (transaction: Transaction) => {
-    setDeletingTransaction(transaction);
-    setShowDeleteDialog(true);
-    setDeleteError(null);
+  const handleExpenseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormLoading(true);
+    setFormError(null);
+
+    try {
+      const url = editingExpense ? '/api/financial/expenses' : '/api/financial/expenses';
+      const method = editingExpense ? 'PUT' : 'POST';
+      const body = editingExpense 
+        ? { id: editingExpense.id, ...expenseFormState }
+        : expenseFormState;
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save expense');
+      }
+
+      // Refresh data
+      const expensesRes = await fetch('/api/financial/expenses');
+      const expensesData = await expensesRes.json();
+      setExpenses(expensesData || []);
+      
+      closeExpenseModal();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'An error occurred');
+    } finally {
+      setFormLoading(false);
+    }
   };
-  const closeDeleteDialog = () => {
-    setShowDeleteDialog(false);
-    setDeletingTransaction(null);
-    setDeleteError(null);
-  };
-  const handleDeleteTransaction = async () => {
-    if (!deletingTransaction) return;
+
+  // Handle delete
+  const handleDelete = async () => {
+    if (!deletingItem) return;
+    
     setDeleteLoading(true);
     setDeleteError(null);
+
     try {
-      const res = await fetch('/api/financial', {
+      const isExpense = 'budget_id' in deletingItem;
+      const url = isExpense ? '/api/financial/expenses' : '/api/financial';
+      
+      const response = await fetch(url, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: deletingTransaction.id }),
+        body: JSON.stringify({ id: deletingItem.id }),
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to delete transaction');
+
+      if (!response.ok) {
+        throw new Error('Failed to delete item');
       }
-      // Refresh transactions
-      const data = await fetch('/api/financial').then(r => r.json());
-      setTransactions((data.transactions || []) as Transaction[]);
-      closeDeleteDialog();
-    } catch (err: any) {
-      setDeleteError(err.message || 'Error');
+
+      // Refresh data
+      if (isExpense) {
+        const expensesRes = await fetch('/api/financial/expenses');
+        const expensesData = await expensesRes.json();
+        setExpenses(expensesData || []);
+      } else {
+        const res = await fetch('/api/financial');
+        const data = await res.json();
+        setTransactions((data.transactions || []) as Transaction[]);
+      }
+      
+      setShowDeleteDialog(false);
+      setDeletingItem(null);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'An error occurred');
     } finally {
       setDeleteLoading(false);
     }
   };
 
-  // Budget modal handlers
-  const openNewBudgetModal = () => {
-    setEditingBudget(null);
-    setBudgetFormState({});
-    setShowBudgetModal(true);
-    setBudgetFormError(null);
-  };
-  const openEditBudgetModal = (budget: Budget) => {
-    setEditingBudget(budget);
-    setBudgetFormState(budget);
-    setShowBudgetModal(true);
-    setBudgetFormError(null);
-  };
-  const closeBudgetModal = () => {
-    setShowBudgetModal(false);
-    setEditingBudget(null);
-    setBudgetFormState({});
-    setBudgetFormError(null);
-  };
-  const handleBudgetFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setBudgetFormState(prev => ({ ...prev, [name]: value }));
-  };
-  const handleBudgetSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBudgetFormLoading(true);
-    setBudgetFormError(null);
-    try {
-      const method = editingBudget ? 'PUT' : 'POST';
-      const body = editingBudget ? { ...budgetFormState, id: editingBudget.id } : budgetFormState;
-      const res = await fetch('/api/financial?budgets=1', {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to save budget');
-      }
-      // Refresh budgets
-      const data = await fetch('/api/financial?budgets=1').then(r => r.json());
-      setBudgets((data.budgets || []) as Budget[]);
-      closeBudgetModal();
-    } catch (err: any) {
-      setBudgetFormError(err.message || 'Error');
-    } finally {
-      setBudgetFormLoading(false);
-    }
-  };
-
-  // Budget delete handlers
-  const openBudgetDeleteDialog = (budget: Budget) => {
-    setDeletingBudget(budget);
-    setShowBudgetDeleteDialog(true);
-    setBudgetDeleteError(null);
-  };
-  const closeBudgetDeleteDialog = () => {
-    setShowBudgetDeleteDialog(false);
-    setDeletingBudget(null);
-    setBudgetDeleteError(null);
-  };
-  const handleDeleteBudget = async () => {
-    if (!deletingBudget) return;
-    setBudgetDeleteLoading(true);
-    setBudgetDeleteError(null);
-    try {
-      const res = await fetch('/api/financial?budgets=1', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: deletingBudget.id }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to delete budget');
-      }
-      // Refresh budgets
-      const data = await fetch('/api/financial?budgets=1').then(r => r.json());
-      setBudgets((data.budgets || []) as Budget[]);
-      closeBudgetDeleteDialog();
-    } catch (err: any) {
-      setBudgetDeleteError(err.message || 'Error');
-    } finally {
-      setBudgetDeleteLoading(false);
-    }
+  // Export to CSV
+  const exportToCSV = () => {
+    const headers = ['Date', 'Description', 'Category', 'Amount', 'Type', 'Method'];
+    const csvData = filteredTransactions.map(t => [
+      t.date,
+      t.description,
+      t.category,
+      t.amount,
+      t.type,
+      t.method
+    ]);
+    
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `financial-report-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   return (
@@ -485,9 +451,17 @@ export default function FinancesPage() {
         </div>
         
         <div className="flex items-center space-x-2">
+          <Button variant="outline" onClick={exportToCSV}>
+            <Download className="mr-2 h-4 w-4" />
+            Export CSV
+          </Button>
           <Button onClick={openNewTransactionModal}>
             <Plus className="mr-2 h-4 w-4" />
             New Transaction
+          </Button>
+          <Button variant="outline" onClick={openNewExpenseModal}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Expense
           </Button>
         </div>
       </div>
@@ -551,9 +525,9 @@ export default function FinancesPage() {
       <Tabs defaultValue="transactions" className="space-y-4">
         <TabsList>
           <TabsTrigger value="transactions">Transactions</TabsTrigger>
+          <TabsTrigger value="expenses">Expenses</TabsTrigger>
           <TabsTrigger value="budgets">Budgets</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
-          <TabsTrigger value="giving">Giving</TabsTrigger>
         </TabsList>
         
         <TabsContent value="transactions">
@@ -568,47 +542,32 @@ export default function FinancesPage() {
               />
             </div>
             
-            <div className="flex space-x-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline">
-                    <Filter className="mr-2 h-4 w-4" />
-                    Filter
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Filter by Type</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => setTypeFilter('all')}>
-                    All Transactions
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setTypeFilter('income')}>
-                    Income Only
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setTypeFilter('expense')}>
-                    Expenses Only
-                  </DropdownMenuItem>
-                  
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>Filter by Date</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => setDateRange('week')}>
-                    This Week
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setDateRange('month')}>
-                    This Month
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setDateRange('quarter')}>
-                    This Quarter
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setDateRange('year')}>
-                    This Year
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+            <div className="flex gap-2">
+              <Select value={typeFilter} onValueChange={(value: any) => setTypeFilter(value)}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="income">Income</SelectItem>
+                  <SelectItem value="expense">Expense</SelectItem>
+                </SelectContent>
+              </Select>
               
-              <Button variant="outline">
-                <Download className="mr-2 h-4 w-4" />
-                Export
-              </Button>
+              <Select value={categoryFilter} onValueChange={(value: any) => setCategoryFilter(value)}>
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  <SelectItem value="Tithes">Tithes</SelectItem>
+                  <SelectItem value="Offerings">Offerings</SelectItem>
+                  <SelectItem value="Donations">Donations</SelectItem>
+                  <SelectItem value="Utilities">Utilities</SelectItem>
+                  <SelectItem value="Events">Events</SelectItem>
+                  <SelectItem value="Administration">Administration</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           
@@ -646,24 +605,33 @@ export default function FinancesPage() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center">
+                        <div className="flex items-center gap-1">
                           {getTransactionMethodIcon(transaction.method)}
-                          <span className="ml-1 capitalize">{transaction.method}</span>
+                          <span className="text-xs">{transaction.method}</span>
                         </div>
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Button variant="ghost" className="h-8 w-8 p-0">
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEditTransactionModal(transaction)}>Edit Transaction</DropdownMenuItem>
-                            <DropdownMenuItem>View Details</DropdownMenuItem>
-                            <DropdownMenuItem>Print Receipt</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-red-600" onClick={() => openDeleteDialog(transaction)}>Delete Transaction</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEditTransactionModal(transaction)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                setDeletingItem(transaction);
+                                setShowDeleteDialog(true);
+                              }}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -672,115 +640,121 @@ export default function FinancesPage() {
                 </TableBody>
               </Table>
             </CardContent>
-            <CardFooter className="flex justify-between border-t p-4">
-              <div className="text-sm text-muted-foreground">
-                Showing {filteredTransactions.length} of {transactions.length} transactions
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button variant="outline" size="sm" disabled>Previous</Button>
-                <Button variant="outline" size="sm">Next</Button>
-              </div>
-            </CardFooter>
           </Card>
         </TabsContent>
-        
-        <TabsContent value="budgets">
+
+        <TabsContent value="expenses">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-medium">Budget Management</h2>
-            <div className="flex space-x-2">
-              <Button onClick={openNewBudgetModal}>
-                <Plus className="mr-2 h-4 w-4" />
-                New Budget
-              </Button>
-              <Button variant="outline">
-                <Download className="mr-2 h-4 w-4" />
-                Export
-              </Button>
-            </div>
+            <h2 className="text-lg font-medium">Expense Management</h2>
+            <Button onClick={openNewExpenseModal}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Expense
+            </Button>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {budgets.map(budget => (
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Vendor</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(expenses || []).map(expense => (
+                    <TableRow key={expense.id}>
+                      <TableCell>
+                        <div className="flex items-center">
+                          <Calendar className="h-3 w-3 mr-1" />
+                          <span>{format(parseISO(expense.date), 'MMM d, yyyy')}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{expense.description}</TableCell>
+                      <TableCell>{expense.vendor || 'N/A'}</TableCell>
+                      <TableCell className="text-red-600">
+                        -{formatCurrency(expense.amount)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={expense.status === 'approved' ? 'default' : 'secondary'}>
+                          {expense.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditExpenseModal(expense)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                setDeletingItem(expense);
+                                setShowDeleteDialog(true);
+                              }}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="budgets">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {(budgets || []).map(budget => (
               <Card key={budget.id}>
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between">
-                    <CardTitle className="text-base">{budget.category}</CardTitle>
-                    <span className="text-sm text-muted-foreground">{budget.period}</span>
-                  </div>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    {budget.category}
+                    <Badge variant="outline">{budget.period}</Badge>
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="pb-2">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Budget</span>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span>Allocated</span>
                       <span className="font-medium">{formatCurrency(budget.allocated)}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
+                    <div className="flex justify-between">
                       <span>Spent</span>
-                      <span className="font-medium">{formatCurrency(budget.spent)}</span>
+                      <span className="font-medium text-red-600">{formatCurrency(budget.spent)}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
+                    <div className="flex justify-between">
                       <span>Remaining</span>
-                      <span className="font-medium">{formatCurrency(budget.remaining)}</span>
+                      <span className="font-medium text-green-600">{formatCurrency(budget.remaining)}</span>
                     </div>
-                    
-                    <div className="w-full bg-muted rounded-full h-2.5">
+                    <div className="w-full bg-gray-200 rounded-full h-2">
                       <div 
-                        className={`h-2.5 rounded-full ${
-                          getBudgetProgress(budget.spent, budget.allocated) > 90 
-                            ? 'bg-red-600' 
-                            : getBudgetProgress(budget.spent, budget.allocated) > 75 
-                              ? 'bg-yellow-500' 
-                              : 'bg-green-600'
-                        }`}
-                        style={{ width: `${getBudgetProgress(budget.spent, budget.allocated)}%` }}
+                        className="bg-blue-600 h-2 rounded-full" 
+                        style={{ width: `${(budget.spent / budget.allocated) * 100}%` }}
                       ></div>
                     </div>
-                    <p className="text-xs text-right text-muted-foreground">
-                      {getBudgetProgress(budget.spent, budget.allocated)}% used
-                    </p>
                   </div>
                 </CardContent>
-                <CardFooter className="pt-2">
-                  <div className="flex space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => openEditBudgetModal(budget)}>Edit</Button>
-                    <Button variant="destructive" size="sm" onClick={() => openBudgetDeleteDialog(budget)}>Delete</Button>
-                  </div>
-                </CardFooter>
               </Card>
             ))}
           </div>
         </TabsContent>
-        
+
         <TabsContent value="reports">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-medium">Financial Reports</h2>
-            <div className="flex space-x-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline">
-                    <Calendar className="mr-2 h-4 w-4" />
-                    July 2025
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem>June 2025</DropdownMenuItem>
-                  <DropdownMenuItem>July 2025</DropdownMenuItem>
-                  <DropdownMenuItem>August 2025</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem>Q2 2025</DropdownMenuItem>
-                  <DropdownMenuItem>Q3 2025</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem>Custom Range...</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              
-              <Button variant="outline">
-                <Download className="mr-2 h-4 w-4" />
-                Export
-              </Button>
-            </div>
-          </div>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
@@ -788,12 +762,16 @@ export default function FinancesPage() {
                 <CardDescription>Monthly comparison</CardDescription>
               </CardHeader>
               <CardContent className="p-6">
-                <div className="h-80 flex items-center justify-center bg-muted/20 rounded-md">
-                  <div className="text-center">
-                    <BarChart className="h-16 w-16 mx-auto text-muted-foreground" />
-                    <p className="mt-2 text-sm text-muted-foreground">Bar chart visualization would go here</p>
-                  </div>
-                </div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <RechartsBarChart data={monthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                    <Bar dataKey="income" fill="#10b981" name="Income" />
+                    <Bar dataKey="expenses" fill="#ef4444" name="Expenses" />
+                  </RechartsBarChart>
+                </ResponsiveContainer>
               </CardContent>
             </Card>
             
@@ -803,12 +781,25 @@ export default function FinancesPage() {
                 <CardDescription>By category</CardDescription>
               </CardHeader>
               <CardContent className="p-6">
-                <div className="h-80 flex items-center justify-center bg-muted/20 rounded-md">
-                  <div className="text-center">
-                    <PieChart className="h-16 w-16 mx-auto text-muted-foreground" />
-                    <p className="mt-2 text-sm text-muted-foreground">Pie chart visualization would go here</p>
-                  </div>
-                </div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <RechartsPieChart>
+                    <Pie
+                      data={categoryData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                                             label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {categoryData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                  </RechartsPieChart>
+                </ResponsiveContainer>
               </CardContent>
             </Card>
             
@@ -828,228 +819,242 @@ export default function FinancesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    <TableRow>
-                      <TableCell>January</TableCell>
-                      <TableCell>{formatCurrency(18500)}</TableCell>
-                      <TableCell>{formatCurrency(15200)}</TableCell>
-                      <TableCell className="text-green-600">{formatCurrency(3300)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>February</TableCell>
-                      <TableCell>{formatCurrency(17800)}</TableCell>
-                      <TableCell>{formatCurrency(14900)}</TableCell>
-                      <TableCell className="text-green-600">{formatCurrency(2900)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>March</TableCell>
-                      <TableCell>{formatCurrency(19200)}</TableCell>
-                      <TableCell>{formatCurrency(16100)}</TableCell>
-                      <TableCell className="text-green-600">{formatCurrency(3100)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>April</TableCell>
-                      <TableCell>{formatCurrency(20100)}</TableCell>
-                      <TableCell>{formatCurrency(16800)}</TableCell>
-                      <TableCell className="text-green-600">{formatCurrency(3300)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>May</TableCell>
-                      <TableCell>{formatCurrency(19500)}</TableCell>
-                      <TableCell>{formatCurrency(17200)}</TableCell>
-                      <TableCell className="text-green-600">{formatCurrency(2300)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>June</TableCell>
-                      <TableCell>{formatCurrency(21000)}</TableCell>
-                      <TableCell>{formatCurrency(18500)}</TableCell>
-                      <TableCell className="text-green-600">{formatCurrency(2500)}</TableCell>
-                    </TableRow>
+                    {monthlyData.map((data, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{data.month}</TableCell>
+                        <TableCell className="text-green-600">{formatCurrency(data.income)}</TableCell>
+                        <TableCell className="text-red-600">{formatCurrency(data.expenses)}</TableCell>
+                        <TableCell className={data.income - data.expenses >= 0 ? 'text-green-600' : 'text-red-600'}>
+                          {formatCurrency(data.income - data.expenses)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </CardContent>
-              <CardFooter>
-                <Button variant="outline" className="w-full">
-                  Generate Annual Report
-                </Button>
-              </CardFooter>
             </Card>
           </div>
-        </TabsContent>
-        
-        <TabsContent value="giving">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-medium">Giving Management</h2>
-            <div className="flex space-x-2">
-              <Button variant="outline">
-                <Download className="mr-2 h-4 w-4" />
-                Export Statements
-              </Button>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Record Donation
-              </Button>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Total Giving</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(42500)}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  <TrendingUp className="inline h-3 w-3 mr-1" />
-                  <span>+8.3% from last month</span>
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Online Giving</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(28750)}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  <TrendingUp className="inline h-3 w-3 mr-1" />
-                  <span>+12.5% from last month</span>
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Active Givers</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">87</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  <TrendingUp className="inline h-3 w-3 mr-1" />
-                  <span>+5 from last month</span>
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle>Top Givers</CardTitle>
-              <CardDescription>Year-to-date giving summary</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>YTD Giving</TableHead>
-                    <TableHead>Last Gift</TableHead>
-                    <TableHead>Frequency</TableHead>
-                    <TableHead>Method</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell>John & Mary Smith</TableCell>
-                    <TableCell>{formatCurrency(5200)}</TableCell>
-                    <TableCell>July 14, 2025</TableCell>
-                    <TableCell>Weekly</TableCell>
-                    <TableCell>Online</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="sm">View History</Button>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Robert Johnson</TableCell>
-                    <TableCell>{formatCurrency(4800)}</TableCell>
-                    <TableCell>July 14, 2025</TableCell>
-                    <TableCell>Weekly</TableCell>
-                    <TableCell>Check</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="sm">View History</Button>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Sarah Williams</TableCell>
-                    <TableCell>{formatCurrency(3750)}</TableCell>
-                    <TableCell>July 10, 2025</TableCell>
-                    <TableCell>Monthly</TableCell>
-                    <TableCell>Online</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="sm">View History</Button>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Michael & Jennifer Davis</TableCell>
-                    <TableCell>{formatCurrency(3200)}</TableCell>
-                    <TableCell>July 14, 2025</TableCell>
-                    <TableCell>Weekly</TableCell>
-                    <TableCell>Online</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="sm">View History</Button>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Thomas Anderson</TableCell>
-                    <TableCell>{formatCurrency(2800)}</TableCell>
-                    <TableCell>July 7, 2025</TableCell>
-                    <TableCell>Bi-weekly</TableCell>
-                    <TableCell>Cash</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="sm">View History</Button>
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent>
-            <CardFooter className="flex justify-between">
-              <Button variant="outline">Generate Giving Statements</Button>
-              <Button variant="outline">Send Thank You Emails</Button>
-            </CardFooter>
-          </Card>
         </TabsContent>
       </Tabs>
 
       {/* Transaction Modal */}
       <Dialog open={showTransactionModal} onOpenChange={setShowTransactionModal}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>{editingTransaction ? 'Edit Transaction' : 'New Transaction'}</DialogTitle>
+            <DialogTitle>
+              {editingTransaction ? 'Edit Transaction' : 'New Transaction'}
+            </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleTransactionSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="date">Date</Label>
-              <Input type="date" name="date" value={formState.date || ''} onChange={handleFormChange} required />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="amount">Amount</Label>
+                <Input
+                  id="amount"
+                  name="amount"
+                  type="number"
+                  step="0.01"
+                  required
+                  value={formState.amount || ''}
+                  onChange={handleFormChange}
+                />
+              </div>
+              <div>
+                <Label htmlFor="type">Type</Label>
+                <Select 
+                  name="type" 
+                  value={formState.type || 'income'} 
+                  onValueChange={(value) => setFormState(prev => ({ ...prev, type: value as 'income' | 'expense' }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="income">Income</SelectItem>
+                    <SelectItem value="expense">Expense</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            
             <div>
               <Label htmlFor="description">Description</Label>
-              <Input name="description" value={formState.description || ''} onChange={handleFormChange} required />
+              <Input
+                id="description"
+                name="description"
+                required
+                value={formState.description || ''}
+                onChange={handleFormChange}
+              />
             </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="category">Category</Label>
+                <Select 
+                  name="category" 
+                  value={formState.category || ''} 
+                  onValueChange={(value) => setFormState(prev => ({ ...prev, category: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Tithes">Tithes</SelectItem>
+                    <SelectItem value="Offerings">Offerings</SelectItem>
+                    <SelectItem value="Donations">Donations</SelectItem>
+                    <SelectItem value="Utilities">Utilities</SelectItem>
+                    <SelectItem value="Events">Events</SelectItem>
+                    <SelectItem value="Administration">Administration</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="method">Payment Method</Label>
+                <Select 
+                  name="method" 
+                  value={formState.method || 'cash'} 
+                  onValueChange={(value) => setFormState(prev => ({ ...prev, method: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="card">Card</SelectItem>
+                    <SelectItem value="check">Check</SelectItem>
+                    <SelectItem value="online">Online</SelectItem>
+                    <SelectItem value="transfer">Transfer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
             <div>
-              <Label htmlFor="category">Category</Label>
-              <Input name="category" value={formState.category || ''} onChange={handleFormChange} required />
+              <Label htmlFor="date">Date</Label>
+              <Input
+                id="date"
+                name="date"
+                type="date"
+                required
+                value={formState.date || new Date().toISOString().split('T')[0]}
+                onChange={handleFormChange}
+              />
             </div>
+            
+            {formError && (
+              <div className="text-red-600 text-sm">{formError}</div>
+            )}
+            
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeTransactionModal}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={formLoading}>
+                {formLoading ? 'Saving...' : (editingTransaction ? 'Update' : 'Create')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Expense Modal */}
+      <Dialog open={showExpenseModal} onOpenChange={setShowExpenseModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              {editingExpense ? 'Edit Expense' : 'New Expense'}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleExpenseSubmit} className="space-y-4">
             <div>
               <Label htmlFor="amount">Amount</Label>
-              <Input type="number" name="amount" value={formState.amount || ''} onChange={handleFormChange} required min="0" step="0.01" />
+              <Input
+                id="amount"
+                name="amount"
+                type="number"
+                step="0.01"
+                required
+                value={expenseFormState.amount || ''}
+                onChange={handleExpenseFormChange}
+              />
             </div>
+            
             <div>
-              <Label htmlFor="type">Type</Label>
-              <select name="type" value={formState.type || ''} onChange={handleFormChange} required className="w-full border rounded p-2">
-                <option value="">Select type</option>
-                <option value="income">Income</option>
-                <option value="expense">Expense</option>
-              </select>
+              <Label htmlFor="description">Description</Label>
+              <Input
+                id="description"
+                name="description"
+                required
+                value={expenseFormState.description || ''}
+                onChange={handleExpenseFormChange}
+              />
             </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="vendor">Vendor</Label>
+                <Input
+                  id="vendor"
+                  name="vendor"
+                  value={expenseFormState.vendor || ''}
+                  onChange={handleExpenseFormChange}
+                />
+              </div>
+              <div>
+                <Label htmlFor="payment_method">Payment Method</Label>
+                <Select 
+                  name="payment_method" 
+                  value={expenseFormState.payment_method || 'cash'} 
+                  onValueChange={(value) => setExpenseFormState(prev => ({ ...prev, payment_method: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="card">Card</SelectItem>
+                    <SelectItem value="check">Check</SelectItem>
+                    <SelectItem value="online">Online</SelectItem>
+                    <SelectItem value="transfer">Transfer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
             <div>
-              <Label htmlFor="method">Method</Label>
-              <Input name="method" value={formState.method || ''} onChange={handleFormChange} required />
+              <Label htmlFor="date">Date</Label>
+              <Input
+                id="date"
+                name="date"
+                type="date"
+                required
+                value={expenseFormState.date || new Date().toISOString().split('T')[0]}
+                onChange={handleExpenseFormChange}
+              />
             </div>
-            {formError && <div className="text-red-600 text-sm">{formError}</div>}
+            
+            <div>
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
+                name="notes"
+                value={expenseFormState.notes || ''}
+                onChange={handleExpenseFormChange}
+              />
+            </div>
+            
+            {formError && (
+              <div className="text-red-600 text-sm">{formError}</div>
+            )}
+            
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeTransactionModal} disabled={formLoading}>Cancel</Button>
-              <Button type="submit" disabled={formLoading}>{formLoading ? 'Saving...' : 'Save'}</Button>
+              <Button type="button" variant="outline" onClick={closeExpenseModal}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={formLoading}>
+                {formLoading ? 'Saving...' : (editingExpense ? 'Update' : 'Create')}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -1059,66 +1064,22 @@ export default function FinancesPage() {
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Transaction</DialogTitle>
+            <DialogTitle>Confirm Delete</DialogTitle>
           </DialogHeader>
-          <div>Are you sure you want to delete this transaction?</div>
-          {deleteError && <div className="text-red-600 text-sm">{deleteError}</div>}
+          <p>Are you sure you want to delete this item? This action cannot be undone.</p>
+          {deleteError && (
+            <div className="text-red-600 text-sm">{deleteError}</div>
+          )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={closeDeleteDialog} disabled={deleteLoading}>Cancel</Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteTransaction} disabled={deleteLoading}>
-              {deleteLoading ? 'Deleting...' : 'Delete'}
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+              Cancel
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Budget Modal */}
-      <Dialog open={showBudgetModal} onOpenChange={setShowBudgetModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingBudget ? 'Edit Budget' : 'New Budget'}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleBudgetSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="category">Category</Label>
-              <Input name="category" value={budgetFormState.category || ''} onChange={handleBudgetFormChange} required />
-            </div>
-            <div>
-              <Label htmlFor="allocated">Allocated</Label>
-              <Input type="number" name="allocated" value={budgetFormState.allocated || ''} onChange={handleBudgetFormChange} required min="0" step="0.01" />
-            </div>
-            <div>
-              <Label htmlFor="spent">Spent</Label>
-              <Input type="number" name="spent" value={budgetFormState.spent || ''} onChange={handleBudgetFormChange} required min="0" step="0.01" />
-            </div>
-            <div>
-              <Label htmlFor="remaining">Remaining</Label>
-              <Input type="number" name="remaining" value={budgetFormState.remaining || ''} onChange={handleBudgetFormChange} required min="0" step="0.01" />
-            </div>
-            <div>
-              <Label htmlFor="period">Period</Label>
-              <Input name="period" value={budgetFormState.period || ''} onChange={handleBudgetFormChange} required />
-            </div>
-            {budgetFormError && <div className="text-red-600 text-sm">{budgetFormError}</div>}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeBudgetModal} disabled={budgetFormLoading}>Cancel</Button>
-              <Button type="submit" disabled={budgetFormLoading}>{budgetFormLoading ? 'Saving...' : 'Save'}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-      {/* Budget Delete Confirmation Dialog */}
-      <Dialog open={showBudgetDeleteDialog} onOpenChange={setShowBudgetDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Budget</DialogTitle>
-          </DialogHeader>
-          <div>Are you sure you want to delete this budget?</div>
-          {budgetDeleteError && <div className="text-red-600 text-sm">{budgetDeleteError}</div>}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={closeBudgetDeleteDialog} disabled={budgetDeleteLoading}>Cancel</Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteBudget} disabled={budgetDeleteLoading}>
-              {budgetDeleteLoading ? 'Deleting...' : 'Delete'}
+            <Button 
+              variant="destructive" 
+              onClick={handleDelete}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

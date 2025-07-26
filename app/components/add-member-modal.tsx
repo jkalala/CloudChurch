@@ -3,7 +3,7 @@ import { DialogShell } from "./_shared/dialog-shell"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import type { FormEvent } from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { CalendarIcon } from "lucide-react"
@@ -11,292 +11,258 @@ import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-
-interface Member {
-  id?: string
-  name?: string
-  first_name: string
-  last_name: string
-  email?: string
-  phone?: string
-  address?: string
-  date_of_birth?: string
-  baptism_date?: string
-  gender?: string
-  marital_status?: string
-  occupation?: string
-  department?: string
-  emergency_contact?: string
-  notes?: string
-  join_date?: string
-  member_status?: string
-}
+import { DatabaseService, type Member } from "@/lib/database";
+import { useAuth } from "@/components/auth-provider";
 
 interface AddMemberModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onSubmit: (memberData: Partial<Member>) => void
+  isOpen: boolean;
+  onClose: () => void;
+  families: { id: string; family_name: string }[];
+  onMemberAdded?: (member: Member) => void;
 }
 
-export function AddMemberModal({ open, onOpenChange, onSubmit }: AddMemberModalProps) {
-  const [formData, setFormData] = useState({
-    first_name: "",
-    last_name: "",
-    email: "",
-    phone: "",
-    address: "",
-    date_of_birth: undefined as Date | undefined,
-    baptism_date: undefined as Date | undefined,
-    gender: "",
-    marital_status: "",
-    occupation: "",
-    department: "",
-    emergency_contact: "",
-    notes: "",
-  })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+export function AddMemberModal({ isOpen, onClose, families, onMemberAdded }: AddMemberModalProps) {
+  const { userProfile } = useAuth();
+  const isAdmin = userProfile?.role === 'admin';
+  // State for all fields
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [gender, setGender] = useState("");
+  const [address, setAddress] = useState("");
+  const [joinDate, setJoinDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [memberStatus, setMemberStatus] = useState<'active' | 'inactive' | 'pending'>('active');
+  const [familyId, setFamilyId] = useState<string | null>(null);
+  const [familyRelationshipId, setFamilyRelationshipId] = useState<string | null>(null);
+  const [newFamilyName, setNewFamilyName] = useState("");
+  const [baptismDate, setBaptismDate] = useState("");
+  const [membershipDate, setMembershipDate] = useState("");
+  const [profileImage, setProfileImage] = useState("");
+  const [maritalStatus, setMaritalStatus] = useState("");
+  const [occupation, setOccupation] = useState("");
+  const [department, setDepartment] = useState("");
+  const [emergencyContact, setEmergencyContact] = useState("");
+  const [notes, setNotes] = useState("");
+  const [customFields, setCustomFields] = useState<{ key: string; value: string }[]>([]);
+  const [customKey, setCustomKey] = useState("");
+  const [customValue, setCustomValue] = useState("");
+  // Hidden/advanced
+  const [faceRecognitionData] = useState<any>(null); // Not shown in UI for now
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // State for departments and existing members
+  const [departments, setDepartments] = useState<{ id: string; name: string; type: string }[]>([]);
+  const [existingMembers, setExistingMembers] = useState<{ id: string; first_name: string; last_name: string }[]>([]);
+  const [loadingData, setLoadingData] = useState(false);
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-    try {
-      await onSubmit({
-        ...formData,
-        date_of_birth: formData.date_of_birth ? formData.date_of_birth.toISOString().slice(0, 10) : undefined,
-        baptism_date: formData.baptism_date ? formData.baptism_date.toISOString().slice(0, 10) : undefined,
-        join_date: new Date().toISOString().slice(0, 10),
-        member_status: "active",
-      })
-      setFormData({
-        first_name: "",
-        last_name: "",
-        email: "",
-        phone: "",
-        address: "",
-        date_of_birth: undefined,
-        baptism_date: undefined,
-        gender: "",
-        marital_status: "",
-        occupation: "",
-        department: "",
-        emergency_contact: "",
-        notes: "",
-      })
-      onOpenChange(false)
-    } catch (err: any) {
-      setError(err.message || 'Erro ao adicionar membro')
-    } finally {
-      setLoading(false)
+  // Load departments and existing members when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      loadData();
     }
-  }
+  }, [isOpen]);
+
+  const loadData = async () => {
+    setLoadingData(true);
+    try {
+      // Load departments
+      const deptResponse = await fetch('/api/departments');
+      const deptData = await deptResponse.json();
+      if (deptData.departments) {
+        setDepartments(deptData.departments);
+      }
+      
+      // Load existing members for family relationship
+      const membersResponse = await fetch('/api/members');
+      const membersData = await membersResponse.json();
+      if (membersData.members) {
+        setExistingMembers(membersData.members.map((m: any) => ({
+          id: m.id,
+          first_name: m.first_name,
+          last_name: m.last_name
+        })));
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  const handleAddCustomField = () => {
+    if (customKey && customValue) {
+      setCustomFields([...customFields, { key: customKey, value: customValue }]);
+      setCustomKey("");
+      setCustomValue("");
+    }
+  };
+
+  const handleSubmit = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      let finalFamilyId = familyId;
+      if (!finalFamilyId && newFamilyName) {
+        const newFamily = await DatabaseService.createFamily({ family_name: newFamilyName });
+        finalFamilyId = newFamily.id;
+      }
+      const member = await DatabaseService.addMember({
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        phone,
+        date_of_birth: dateOfBirth,
+        gender,
+        address,
+        join_date: joinDate,
+        member_status: memberStatus,
+        family_id: finalFamilyId,
+        baptism_date: baptismDate,
+        membership_date: membershipDate,
+        profile_image: profileImage,
+        marital_status: maritalStatus,
+        occupation,
+        department: department === "none" ? "" : department,
+        emergency_contact: emergencyContact,
+        notes,
+        custom_fields: customFields,
+        // face_recognition_data: isAdmin ? faceRecognitionData : undefined,
+      });
+      if (onMemberAdded) onMemberAdded(member);
+      onClose();
+    } catch (e: any) {
+      setError(e.message || "Failed to add member");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <DialogShell isOpen={open} onClose={() => onOpenChange(false)} title="Adicionar Novo Membro" size="xl" className="max-w-xl">
-      <form onSubmit={handleSubmit} className="space-y-6 max-h-[90vh] overflow-y-auto">
+    <DialogShell isOpen={isOpen} onClose={onClose} title="Add New Member">
+      <div className="space-y-6 max-h-[80vh] overflow-y-auto p-1">
+        {/* Basic Info */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input required placeholder="First Name" value={firstName} onChange={e => setFirstName(e.target.value)} />
+          <Input required placeholder="Last Name" value={lastName} onChange={e => setLastName(e.target.value)} />
+          <Input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
+          <Input placeholder="Phone" value={phone} onChange={e => setPhone(e.target.value)} />
+          <div>
+            <label className="block mb-1 font-medium">Date of Birth</label>
+            <Input type="date" placeholder="Date of Birth" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} />
+          </div>
+          <Select value={gender} onValueChange={setGender}>
+            <SelectTrigger><SelectValue placeholder="Gender" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="male">Male</SelectItem>
+              <SelectItem value="female">Female</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {/* Address & Status */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input placeholder="Address" value={address} onChange={e => setAddress(e.target.value)} />
+          <div>
+            <label className="block mb-1 font-medium">Join Date</label>
+            <Input type="date" placeholder="Join Date" value={joinDate} onChange={e => setJoinDate(e.target.value)} />
+          </div>
+          <Select value={memberStatus} onValueChange={v => setMemberStatus(v as 'active' | 'inactive' | 'pending')}>
+            <SelectTrigger><SelectValue placeholder="Member Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {/* Family & Baptism Date */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="first_name">Primeiro Nome *</label>
-            <Input
-              id="first_name"
-              name="first_name"
-              value={formData.first_name}
-              onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="last_name">Último Nome *</label>
-            <Input
-              id="last_name"
-              name="last_name"
-              value={formData.last_name}
-              onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-              required
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="email">Email</label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            />
-          </div>
-          <div>
-            <label htmlFor="phone">Telefone</label>
-            <Input
-              id="phone"
-              name="phone"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            />
-          </div>
-        </div>
-
-        <div>
-          <label htmlFor="address">Endereço</label>
-          <Input
-            id="address"
-            name="address"
-            value={formData.address}
-            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label>Data de Nascimento</label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !formData.date_of_birth && "text-muted-foreground",
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {formData.date_of_birth ? format(formData.date_of_birth, "PPP") : "Selecionar data"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={formData.date_of_birth}
-                  onSelect={(date) => setFormData({ ...formData, date_of_birth: date })}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-          <div>
-            <label>Data de Batismo</label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !formData.baptism_date && "text-muted-foreground",
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {formData.baptism_date ? format(formData.baptism_date, "PPP") : "Selecionar data"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={formData.baptism_date}
-                  onSelect={(date) => setFormData({ ...formData, baptism_date: date })}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="gender">Gênero</label>
-            <Select value={formData.gender} onValueChange={(value) => setFormData({ ...formData, gender: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecionar gênero" />
-              </SelectTrigger>
+            <label className="block mb-1 font-medium">Family</label>
+            <Select value={familyId || ""} onValueChange={setFamilyId}>
+              <SelectTrigger><SelectValue placeholder="Select Family" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="male">Masculino</SelectItem>
-                <SelectItem value="female">Feminino</SelectItem>
+                {families.map(fam => (
+                  <SelectItem key={fam.id} value={fam.id}>{fam.family_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input placeholder="Or add new family..." value={newFamilyName} onChange={e => setNewFamilyName(e.target.value)} className="mt-2" />
+          </div>
+          <div>
+            <label className="block mb-1 font-medium">Family Relationship</label>
+            <Select value={familyRelationshipId || "none"} onValueChange={setFamilyRelationshipId}>
+              <SelectTrigger><SelectValue placeholder="Select Family Member" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No Relationship</SelectItem>
+                {existingMembers.map(member => (
+                  <SelectItem key={member.id} value={member.id}>
+                    {member.first_name} {member.last_name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <label htmlFor="marital_status">Estado Civil</label>
-            <Select
-              value={formData.marital_status}
-              onValueChange={(value) => setFormData({ ...formData, marital_status: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecionar estado civil" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="single">Solteiro</SelectItem>
-                <SelectItem value="married">Casado</SelectItem>
-                <SelectItem value="divorced">Divorciado</SelectItem>
-                <SelectItem value="widowed">Viúvo</SelectItem>
-              </SelectContent>
-            </Select>
+            <label className="block mb-1 font-medium">Baptism Date</label>
+            <Input type="date" placeholder="Baptism Date" value={baptismDate} onChange={e => setBaptismDate(e.target.value)} />
           </div>
         </div>
-
+        {/* Profile & Status */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input placeholder="Profile Image URL" value={profileImage} onChange={e => setProfileImage(e.target.value)} />
+          <Select value={maritalStatus} onValueChange={setMaritalStatus}>
+            <SelectTrigger><SelectValue placeholder="Marital Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="single">Single</SelectItem>
+              <SelectItem value="married">Married</SelectItem>
+              <SelectItem value="divorced">Divorced</SelectItem>
+              <SelectItem value="widowed">Widowed</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input placeholder="Occupation" value={occupation} onChange={e => setOccupation(e.target.value)} />
           <div>
-            <label htmlFor="occupation">Profissão</label>
-            <Input
-              id="occupation"
-              name="occupation"
-              value={formData.occupation}
-              onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
-            />
-          </div>
-          <div>
-            <label htmlFor="department">Departamento</label>
-            <Select
-              value={formData.department}
-              onValueChange={(value) => setFormData({ ...formData, department: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecionar departamento" />
-              </SelectTrigger>
+            <label className="block mb-1 font-medium">Department</label>
+            <Select value={department || "none"} onValueChange={setDepartment}>
+              <SelectTrigger><SelectValue placeholder="Select Department" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="worship">Ministério de Louvor</SelectItem>
-                <SelectItem value="children">Ministério Infantil</SelectItem>
-                <SelectItem value="youth">Ministério Jovem</SelectItem>
-                <SelectItem value="evangelism">Evangelismo</SelectItem>
-                <SelectItem value="administration">Administração</SelectItem>
+                <SelectItem value="none">No Department</SelectItem>
+                {departments.map(dept => (
+                  <SelectItem key={dept.id} value={dept.name}>
+                    {dept.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         </div>
-
+        {/* Emergency & Notes */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input placeholder="Emergency Contact" value={emergencyContact} onChange={e => setEmergencyContact(e.target.value)} />
+          <Input placeholder="Notes" value={notes} onChange={e => setNotes(e.target.value)} />
+        </div>
+        {/* Custom Fields */}
         <div>
-          <label htmlFor="emergency_contact">Contato de Emergência</label>
-          <Input
-            id="emergency_contact"
-            name="emergency_contact"
-            value={formData.emergency_contact}
-            onChange={(e) => setFormData({ ...formData, emergency_contact: e.target.value })}
-          />
+          <label className="block mb-1 font-medium">Custom Fields</label>
+          <div className="flex gap-2 mb-2">
+            <Input placeholder="Field Name" value={customKey} onChange={e => setCustomKey(e.target.value)} />
+            <Input placeholder="Value" value={customValue} onChange={e => setCustomValue(e.target.value)} />
+            <Button onClick={handleAddCustomField} type="button">Add</Button>
+          </div>
+          <ul className="list-disc pl-5">
+            {customFields.map((f, i) => (
+              <li key={i}>{f.key}: {f.value}</li>
+            ))}
+          </ul>
         </div>
-
-        <div>
-          <label htmlFor="notes">Observações</label>
-          <Textarea
-            id="notes"
-            name="notes"
-            value={formData.notes}
-            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            rows={3}
-          />
-        </div>
-        {error && <div className="text-red-600 text-sm">{error}</div>}
-        <div className="flex flex-col md:flex-row gap-2 pt-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-full md:w-auto" disabled={loading}>
-            Cancelar
-          </Button>
-          <Button type="submit" className="w-full md:w-auto" disabled={loading}>
-            {loading ? 'Adicionando...' : 'Adicionar Membro'}
-          </Button>
-        </div>
-      </form>
+        {error && <div className="text-red-600">{error}</div>}
+        <Button onClick={handleSubmit} disabled={loading} className="w-full">{loading ? "Adding..." : "Add Member"}</Button>
+      </div>
     </DialogShell>
-  )
+  );
 }
 
 export default AddMemberModal

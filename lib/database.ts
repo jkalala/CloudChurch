@@ -12,8 +12,8 @@ export interface Member {
   email?: string
   phone?: string
   address?: string
-  date_of_birth?: string
-  baptism_date?: string
+  date_of_birth?: string | null
+  baptism_date?: string | null
   join_date: string
   member_status: "active" | "inactive" | "pending"
   department?: string
@@ -48,7 +48,6 @@ export interface FinancialTransaction {
   id: string
   amount: number
   transaction_type: string
-  category: string
   description?: string
   transaction_date: string
   payment_method: string
@@ -56,6 +55,9 @@ export interface FinancialTransaction {
   created_by: string
   created_at: string
   updated_at: string
+  transaction_reference?: string
+  ministry_id?: string
+  notes?: string
   members?: {
     first_name: string
     last_name: string
@@ -184,20 +186,32 @@ class DatabaseService {
   }
 
   static async createMember(memberData: Partial<Member>): Promise<Member> {
+    // Handle empty date strings - convert to null for optional date fields
+    const insertData = { ...memberData };
+    if (insertData.date_of_birth === "") {
+      insertData.date_of_birth = null;
+    }
+    if (insertData.baptism_date === "") {
+      insertData.baptism_date = null;
+    }
+    if (insertData.join_date === "") {
+      insertData.join_date = new Date().toISOString().split('T')[0]; // Use current date as default
+    }
+    
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       // Offline: queue for sync
-      await offlineStorage.addPendingMemberUpdate(memberData, "POST")
+      await offlineStorage.addPendingMemberUpdate(insertData, "POST")
       // Optionally add to local cache immediately
       const localMembers = await offlineStorage.getMembers()
-      const newMember = { ...memberData, id: `offline-${Date.now()}` }
+      const newMember = { ...insertData, id: `offline-${Date.now()}` }
       await offlineStorage.saveMembers([newMember, ...localMembers])
       return newMember as Member
     }
     const { data, error } = await this.supabase
       .from("members")
       .insert({
-        ...memberData,
-        join_date: memberData.join_date || new Date().toISOString(),
+        ...insertData,
+        join_date: insertData.join_date || new Date().toISOString().split('T')[0],
         member_status: memberData.member_status || "active",
       })
       .select()
@@ -211,26 +225,38 @@ class DatabaseService {
   }
 
   static async updateMember(id: string, memberData: Partial<Member>): Promise<Member> {
+    // Handle empty date strings - convert to null for optional date fields
+    const updateData = { ...memberData };
+    if (updateData.date_of_birth === "") {
+      updateData.date_of_birth = null;
+    }
+    if (updateData.baptism_date === "") {
+      updateData.baptism_date = null;
+    }
+    if (updateData.join_date === "") {
+      updateData.join_date = new Date().toISOString().split('T')[0]; // Use current date as default
+    }
+    
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       // Offline: queue for sync
-      await offlineStorage.addPendingMemberUpdate(memberData, "PUT", id)
+      await offlineStorage.addPendingMemberUpdate(updateData, "PUT", id)
       // Update local cache
       const localMembers = await offlineStorage.getMembers()
-      const updatedMembers = localMembers.map(m => m.id === id ? { ...m, ...memberData } : m)
+      const updatedMembers = localMembers.map(m => m.id === id ? { ...m, ...updateData } : m)
       await offlineStorage.saveMembers(updatedMembers)
       return updatedMembers.find(m => m.id === id) as Member
     }
     const { data, error } = await this.supabase
       .from("members")
       .update({
-        ...memberData,
+        ...updateData,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
       .select()
       .single()
     if (error) throw error
-    await this.logMemberAudit(id, 'edit', memberData)
+    await this.logMemberAudit(id, 'edit', updateData)
     // Update IndexedDB
     const localMembers = await offlineStorage.getMembers()
     const updatedMembers = localMembers.map(m => m.id === id ? data : m)
@@ -265,6 +291,74 @@ class DatabaseService {
   static async getMemberById(id: string): Promise<Member | null> {
     const { data, error } = await this.supabase.from("members").select("*").eq("id", id).single();
     if (error) return null;
+    return data;
+  }
+
+  static async createFamily(familyData: { family_name: string }): Promise<{ id: string; family_name: string }> {
+    const { data, error } = await this.supabase
+      .from("families")
+      .insert({ family_name: familyData.family_name })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  static async getFamilies(): Promise<{ id: string; family_name: string }[]> {
+    try {
+      const { data, error } = await this.supabase
+        .from("families")
+        .select("id, family_name")
+        .order("family_name", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error fetching families:", error);
+      return [];
+    }
+  }
+
+  static async addMember(memberData: Partial<Member> & { family_id?: string | null; custom_fields?: { key: string; value: string }[]; membership_date?: string | null }): Promise<Member> {
+    // Convert custom_fields to JSONB if present
+    const insertData = { ...memberData };
+    if (memberData.custom_fields) {
+      insertData["custom_fields"] = memberData.custom_fields;
+    }
+    
+    // Handle empty date strings - convert to null for optional date fields
+    if (insertData.date_of_birth === "") {
+      insertData.date_of_birth = null;
+    }
+    if (insertData.baptism_date === "") {
+      insertData.baptism_date = null;
+    }
+    if (insertData.membership_date === "") {
+      insertData.membership_date = null;
+    }
+    if (insertData.join_date === "") {
+      insertData.join_date = new Date().toISOString().split('T')[0]; // Use current date as default
+    }
+    
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      await offlineStorage.addPendingMemberUpdate(insertData, "POST");
+      const localMembers = await offlineStorage.getMembers();
+      const newMember = { ...insertData, id: `offline-${Date.now()}` };
+      await offlineStorage.saveMembers([newMember, ...localMembers]);
+      return newMember as Member;
+    }
+    const { data, error } = await this.supabase
+      .from("members")
+      .insert({
+        ...insertData,
+        join_date: insertData.join_date || new Date().toISOString().split('T')[0],
+        member_status: memberData.member_status || "active",
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    await this.logMemberAudit(data.id, 'add', data);
+    const localMembers = await offlineStorage.getMembers();
+    await offlineStorage.saveMembers([data, ...localMembers]);
     return data;
   }
 
@@ -417,7 +511,7 @@ class DatabaseService {
       .from("financial_transactions")
       .insert({
         ...transactionData,
-        created_by: "current-user-id", // TODO: inject real user id
+        created_by: transactionData.created_by || "demo-user-id",
       })
       .select()
       .single()
@@ -511,6 +605,41 @@ class DatabaseService {
     return data
   }
 
+  static async getExpenseById(id: string): Promise<Expense | null> {
+    const { data, error } = await this.supabase
+      .from("expenses")
+      .select("*")
+      .eq("id", id)
+      .single();
+    if (error) {
+      if (error.code === "PGRST116") return null; // Not found
+      throw error;
+    }
+    return data;
+  }
+
+  static async updateExpense(id: string, expenseData: Partial<Expense>): Promise<Expense> {
+    const { data, error } = await this.supabase
+      .from("expenses")
+      .update({
+        ...expenseData,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  static async deleteExpense(id: string): Promise<void> {
+    const { error } = await this.supabase
+      .from("expenses")
+      .delete()
+      .eq("id", id);
+    if (error) throw error;
+  }
+
   static async recordAttendance(attendanceData: any): Promise<any> {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       // Offline: queue for sync
@@ -518,12 +647,23 @@ class DatabaseService {
       // Optionally add to local cache (not shown in UI, but could be added)
       return { ...attendanceData, id: `offline-${Date.now()}` }
     }
+    
+    // Map the incoming data to match the database schema
+    const mappedData: any = {
+      member_id: attendanceData.member_id,
+      attendance_type: attendanceData.activity || attendanceData.attendance_type,
+      notes: attendanceData.notes,
+      check_in_time: attendanceData.checked_in_at || new Date().toISOString(),
+    }
+    
+    // Only add event_id if it's provided and not null
+    if (attendanceData.event_id) {
+      mappedData.event_id = attendanceData.event_id;
+    }
+    
     const { data, error } = await this.supabase
       .from("attendance")
-      .insert({
-        ...attendanceData,
-        recorded_at: new Date().toISOString(),
-      })
+      .insert(mappedData)
       .select()
       .single()
     if (error) throw error
@@ -550,6 +690,25 @@ class DatabaseService {
       return data || []
     } catch (error) {
       console.error("Error fetching attendance records:", error)
+      return []
+    }
+  }
+
+  static async getAttendanceRecordsByMember(memberId: string): Promise<any[]> {
+    try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        // Offline: load from IndexedDB (not implemented, but could be added)
+        return []
+      }
+      const { data, error } = await this.supabase
+        .from("attendance")
+        .select("*")
+        .eq("member_id", memberId)
+        .order("check_in_time", { ascending: false })
+      if (error) throw error
+      return data || []
+    } catch (error) {
+      console.error("Error fetching attendance records for member:", error)
       return []
     }
   }

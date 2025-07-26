@@ -65,6 +65,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { MemberService } from "@/lib/member-service"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartTooltip, ResponsiveContainer } from "recharts"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { AIClient } from "@/lib/ai-client";
 
 type ViewMode = "cards" | "table" | "grid" | "list" | "compact" | "contact"
 type SortField = "name" | "email" | "joinDate" | "department" | "status"
@@ -82,6 +83,7 @@ export default function MemberManagement() {
   const userRole = userProfile?.role || "member"
   const [members, setMembers] = useState<Member[]>([])
   const [filteredMembers, setFilteredMembers] = useState<Member[]>([])
+  const [families, setFamilies] = useState<{ id: string; family_name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [activeTab, setActiveTab] = useState("all")
@@ -247,6 +249,15 @@ export default function MemberManagement() {
       setLoading(true)
       const data = await DatabaseService.getMembers()
       setMembers(data)
+      
+      // Also load families
+      try {
+        const familiesData = await DatabaseService.getFamilies()
+        setFamilies(familiesData)
+      } catch (error) {
+        console.error("Error loading families:", error)
+        setFamilies([])
+      }
     } catch (error) {
       console.error("Error loading members:", error)
     } finally {
@@ -1178,6 +1189,34 @@ export default function MemberManagement() {
     }
   }
 
+  const [aiSearch, setAiSearch] = useState(false);
+  const [aiQuery, setAiQuery] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const handleAISearch = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      // Send the query and all members to OpenAI for filtering
+      const prompt = `You are a church member database assistant. Given the following members: ${JSON.stringify(members)}. Filter and return only the members that match this query: "${aiQuery}". Return as a JSON array of member IDs.`;
+      const response = await AIClient.generateText(prompt);
+      // Try to parse the result as an array of IDs
+      let ids: string[] = [];
+      const match = response.match(/\[([\s\S]*?)\]/);
+      if (match) {
+        try {
+          ids = JSON.parse(match[0]);
+        } catch {}
+      }
+      setFilteredMembers(members.filter(m => ids.includes(m.id)));
+    } catch (e: any) {
+      setAiError("AI search failed. Try a simpler query.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1190,46 +1229,6 @@ export default function MemberManagement() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Member Analytics Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded shadow p-4 flex flex-col gap-2">
-          <div className="text-2xl font-bold">{stats.total}</div>
-          <div className="text-gray-600">Total de Membros</div>
-        </div>
-        <div className="bg-white rounded shadow p-4 flex flex-col gap-2">
-          <div className="flex gap-4">
-            <div>
-              <div className="text-xl font-bold text-green-600">{stats.active}</div>
-              <div className="text-xs text-gray-600">Ativos</div>
-            </div>
-            <div>
-              <div className="text-xl font-bold text-red-600">{stats.inactive}</div>
-              <div className="text-xs text-gray-600">Inativos</div>
-            </div>
-          </div>
-          <div className="mt-2 text-xs text-blue-700">Novos este mês: {stats.newThisMonth}</div>
-          <div className="text-xs text-orange-600">Aniversários este mês: {stats.birthdaysThisMonth}</div>
-        </div>
-        <div className="bg-white rounded shadow p-4 flex flex-col gap-2">
-          <div className="font-semibold mb-1">Tags mais comuns</div>
-          <div className="flex flex-wrap gap-1">
-            {stats.tagCounts.map(([tag, count]) => (
-              <Badge key={tag} variant="secondary">{tag} ({count})</Badge>
-            ))}
-            {stats.tagCounts.length === 0 && <span className="text-xs text-gray-400">Nenhuma tag</span>}
-          </div>
-          <div className="mt-2 font-semibold mb-1">Novos membros por mês</div>
-          <ResponsiveContainer width="100%" height={80}>
-            <BarChart data={stats.newPerMonth} margin={{ left: -20, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" fontSize={10} />
-              <YAxis fontSize={10} width={24} />
-              <RechartTooltip />
-              <Bar dataKey="count" fill="#6366f1" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -1411,16 +1410,34 @@ export default function MemberManagement() {
         <CardContent className="p-4">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder={t("members.search.placeholder")}
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setFilters((f: any) => ({ ...f, search: e.target.value }));
-                }}
-                className="pl-10"
-              />
+              <Button variant={aiSearch ? "default" : "outline"} onClick={() => setAiSearch(!aiSearch)}>
+                {aiSearch ? "AI Search" : "Standard Search"}
+              </Button>
+              {aiSearch ? (
+                <>
+                  <Input
+                    placeholder="Ask a question about members (e.g. 'members who joined last year')"
+                    value={aiQuery}
+                    onChange={e => setAiQuery(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleAISearch()}
+                    className="flex-1"
+                    disabled={aiLoading}
+                  />
+                  <Button onClick={handleAISearch} disabled={aiLoading || !aiQuery}>
+                    {aiLoading ? "Searching..." : "Ask AI"}
+                  </Button>
+                </>
+              ) : (
+                // ... existing standard search input ...
+                <Input
+                  placeholder="Search members..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && setFilteredMembers(members.filter(m => `${m.first_name} ${m.last_name}`.toLowerCase().includes(searchTerm.toLowerCase())))}
+                  className="flex-1"
+                  disabled={loading}
+                />
+              )}
             </div>
             <div className="flex items-center gap-2">
               <ViewModeSelector />
@@ -1433,6 +1450,7 @@ export default function MemberManagement() {
           </div>
         </CardContent>
       </Card>
+      {aiError && <div className="text-red-600 mb-2">{aiError}</div>}
 
       {/* Members Content */}
       <Card>
@@ -1469,15 +1487,10 @@ export default function MemberManagement() {
 
       {/* Modals */}
       <AddMemberModal 
-        open={showAddModal} 
-        onOpenChange={setShowAddModal} 
-        onSubmit={(data) => { 
-          const safeData: Partial<Member> = { ...data, member_status: undefined };
-          if (data.member_status && typeof data.member_status === 'string' && ["active", "inactive", "pending"].includes(data.member_status)) {
-            safeData.member_status = data.member_status as "active" | "inactive" | "pending";
-          }
-          void handleAddMember(safeData); 
-        }} 
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        families={families}
+        onMemberAdded={async () => { await loadMembers(); setShowAddModal(false); }}
       />
 
       {selectedMember && (

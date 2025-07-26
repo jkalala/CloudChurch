@@ -492,7 +492,6 @@ export default function AnalyticsDashboard() {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     member_id: memberId,
-                    date: new Date().toISOString().slice(0, 10),
                     activity: manualCheckin.event || "manual",
                     checked_in_at: new Date().toISOString(),
                   })
