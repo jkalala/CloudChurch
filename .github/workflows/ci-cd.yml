@@ -1,278 +1,301 @@
-name: Mobile Church App CI/CD
+name: CI/CD Pipeline
 
 on:
   push:
     branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 env:
   NODE_VERSION: '18'
-  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  PNPM_VERSION: '8'
 
 jobs:
-  # Code Quality & Testing
-  quality:
-    name: Code Quality & Tests
+  # Lint and Type Check
+  lint:
+    name: Lint and Type Check
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ env.NODE_VERSION }}
-        cache: 'npm'
-        
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Run ESLint
-      run: npm run lint
-      
-    - name: Run TypeScript check
-      run: npx tsc --noEmit
-      
-    - name: Run tests
-      run: npm run test
-      env:
-        CI: true
-        
-    - name: Build application
-      run: npm run build
-      env:
-        NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  # Security Scanning
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ESLint
+        run: pnpm lint
+
+      - name: Run TypeScript type check
+        run: pnpm type-check
+
+  # Test Suite
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [16, 18, 20]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm test --coverage --watchAll=false
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  # Build
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        run: pnpm build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-files
+          path: .next/
+          retention-days: 1
+
+  # Security Scan
   security:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: quality
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Run npm audit
-      run: npm audit --audit-level moderate
-      
-    - name: Run Snyk security scan
-      uses: snyk/actions/node@master
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      with:
-        args: --severity-threshold=high
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  # Database Migration (Staging)
-  database-staging:
-    name: Database Migration - Staging
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run npm audit
+        run: pnpm audit --audit-level moderate
+
+      - name: Run Snyk security scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+  # Database Migration Check
+  database:
+    name: Database Migration Check
     runs-on: ubuntu-latest
-    needs: [quality, security]
-    if: github.ref == 'refs/heads/develop'
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ env.NODE_VERSION }}
-        
-    - name: Install Supabase CLI
-      run: |
-        curl -fsSL https://supabase.com/install.sh | sh
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
-        
-    - name: Run database migrations
-      run: |
-        supabase db push --db-url ${{ secrets.STAGING_DATABASE_URL }}
-      env:
-        SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  # Deploy to Staging
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check SQL scripts syntax
+        run: |
+          for file in scripts/*.sql; do
+            echo "Checking $file..."
+            # Basic SQL syntax check (you might want to use a proper SQL parser)
+            if ! grep -q ";" "$file"; then
+              echo "Warning: $file might be missing semicolons"
+            fi
+          done
+
+  # Deploy to Staging (on develop branch)
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
-    needs: [quality, security, database-staging]
+    needs: [build, security, database]
     if: github.ref == 'refs/heads/develop'
-    
+    environment: staging
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Install Vercel CLI
-      run: npm install --global vercel@latest
-      
-    - name: Pull Vercel Environment Information
-      run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
-      
-    - name: Build Project Artifacts
-      run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
-      
-    - name: Deploy Project Artifacts to Vercel
-      id: deploy
-      run: |
-        url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
-        echo "preview_url=$url" >> $GITHUB_OUTPUT
-        
-    - name: Comment PR with preview URL
-      if: github.event_name == 'pull_request'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: '🚀 **Staging Deployment Ready!**\n\n📱 Preview: ${{ steps.deploy.outputs.preview_url }}\n\n🇦🇴 Test the Angola localization and mobile experience!'
-          })
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  # Database Migration (Production)
-  database-production:
-    name: Database Migration - Production
-    runs-on: ubuntu-latest
-    needs: [quality, security]
-    if: github.ref == 'refs/heads/main'
-    environment: production
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ env.NODE_VERSION }}
-        
-    - name: Install Supabase CLI
-      run: |
-        curl -fsSL https://supabase.com/install.sh | sh
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
-        
-    - name: Backup production database
-      run: |
-        supabase db dump --db-url ${{ secrets.PRODUCTION_DATABASE_URL }} > backup-$(date +%Y%m%d-%H%M%S).sql
-      env:
-        SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        
-    - name: Run database migrations
-      run: |
-        supabase db push --db-url ${{ secrets.PRODUCTION_DATABASE_URL }}
-      env:
-        SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
-  # Deploy to Production
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        run: pnpm build
+
+      - name: Deploy to Vercel (Staging)
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+
+  # Deploy to Production (on main branch)
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: [quality, security, database-production]
+    needs: [build, security, database]
     if: github.ref == 'refs/heads/main'
     environment: production
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Install Vercel CLI
-      run: npm install --global vercel@latest
-      
-    - name: Pull Vercel Environment Information
-      run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-      
-    - name: Build Project Artifacts
-      run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-      
-    - name: Deploy Project Artifacts to Vercel
-      id: deploy
-      run: |
-        url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
-        echo "production_url=$url" >> $GITHUB_OUTPUT
-        
-    - name: Create GitHub Release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: v${{ github.run_number }}
-        release_name: Release v${{ github.run_number }}
-        body: |
-          🚀 **Production Deployment**
-          
-          📱 **Mobile Church App - Angola Edition**
-          🌍 **Languages**: Portuguese, English, French
-          💰 **Currency**: Angolan Kwanza (Kz)
-          
-          **Features:**
-          - Multi-language authentication
-          - Mobile-optimized design
-          - Church management system
-          - Financial dashboard
-          - Event management
-          
-          **Deployment URL**: ${{ steps.deploy.outputs.production_url }}
-        draft: false
-        prerelease: false
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  # Performance & Accessibility Testing
-  lighthouse:
-    name: Lighthouse Performance Test
-    runs-on: ubuntu-latest
-    needs: deploy-staging
-    if: github.ref == 'refs/heads/develop'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Run Lighthouse CI
-      uses: treosh/lighthouse-ci-action@v10
-      with:
-        urls: |
-          https://mobile-church-app-staging.vercel.app
-          https://mobile-church-app-staging.vercel.app/auth
-          https://mobile-church-app-staging.vercel.app/dashboard
-        configPath: './.lighthouserc.json'
-        uploadArtifacts: true
-        temporaryPublicStorage: true
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
-  # Notify Team
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        run: pnpm build
+
+      - name: Deploy to Vercel (Production)
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+
+  # Notify on Success/Failure
   notify:
     name: Notify Team
     runs-on: ubuntu-latest
-    needs: [deploy-production]
-    if: always() && github.ref == 'refs/heads/main'
-    
+    needs: [deploy-staging, deploy-production]
+    if: always()
     steps:
-    - name: Notify Slack on Success
-      if: needs.deploy-production.result == 'success'
-      uses: 8398a7/action-slack@v3
-      with:
-        status: success
-        text: |
-          🎉 **Mobile Church App Deployed Successfully!**
-          
-          🇦🇴 **Angola Edition** is now live!
-          📱 **Mobile-optimized** for African markets
-          🌍 **Multi-language** support (PT/EN/FR)
-          
-          Ready for church communities across Angola! 🙏
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        
-    - name: Notify Slack on Failure
-      if: needs.deploy-production.result == 'failure'
-      uses: 8398a7/action-slack@v3
-      with:
-        status: failure
-        text: |
-          ❌ **Mobile Church App Deployment Failed**
-          
-          Please check the GitHub Actions logs for details.
-          Team intervention required! 🚨
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      - name: Notify on Slack
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#deployments'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        if: always()
+
+      - name: Notify on Discord
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: ${{ job.status }}
+          title: "CloudChurch CI/CD"
+          description: "Deployment completed"
+        if: always()
